@@ -17,7 +17,9 @@ def emit_nfse_batch():
     print(f"[INFO] Pasta de evidências criada: {evidence_dir}")
 
     # 3. Load Excel data
-    excel_path = r"C:\Users\SrgRH\.gemini\antigravity\scratch\itugiss_automation\clientes.xlsx"
+    # Path is now dynamic (relative to this script's location)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    excel_path = os.path.join(current_dir, "clientes.xlsx")
     df = pd.read_excel(excel_path)
     
     with sync_playwright() as p:
