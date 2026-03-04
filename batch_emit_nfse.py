@@ -1,3 +1,6 @@
+import os
+import time
+from datetime import datetime
 import re
 import pandas as pd
 from playwright.sync_api import sync_playwright
@@ -11,14 +14,15 @@ def emit_nfse_batch():
     aliquota = input("Por favor, digite a alíquota de ISS do mês (ex: 2.24): ").replace(',', '.')
     
     # 2. Setup Evidence Folder
+    # Path is now dynamic (relative to this script's location)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    evidence_dir = os.path.join(os.getcwd(), "evidencias", f"execucao_{timestamp}")
+    evidence_dir = os.path.join(current_dir, "evidencias", f"execucao_{timestamp}")
     os.makedirs(evidence_dir, exist_ok=True)
     print(f"[INFO] Pasta de evidências criada: {evidence_dir}")
 
     # 3. Load Excel data
     # Path is now dynamic (relative to this script's location)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
     excel_path = os.path.join(current_dir, "clientes.xlsx")
     df = pd.read_excel(excel_path)
     
