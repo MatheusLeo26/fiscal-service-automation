@@ -1,0 +1,8 @@
+.env
+evidencias/
+*.xlsx
+__pycache__/
+.venv/
+.vscode/
+*.png
+relatorio_final.txt
