@@ -123,41 +123,110 @@ def emit_nfse_batch():
 
         print("[INFO] Fazendo login...")
         page.goto("https://itu.giss.com.br/#/")
-        page.fill("input[name='cpf']", cpf)
-        page.click("button:has-text('Avançar')")
-        page.fill("input[name='password']", password)
-        page.click("button:has-text('Acessar')")
+        
+        # Handle Chrome profile selector if it appears (from user's screenshot)
+        try:
+            # The selector "Seu Chrome" or similar based on user's image
+            if page.query_selector("text='Seu Chrome'") or page.query_selector("div[aria-label*='Chrome']"):
+                print("[INFO] Tela de perfil do Chrome detectada. Ignorando...")
+                page.click("text='Seu Chrome'")
+                page.wait_for_load_state("networkidle")
+        except:
+            pass
+            
+        # Optimized route: Click directly on 'Emitir NFS-e' to go to login
+        try:
+            selector_emitir = "text='Emitir NFS-e'"
+            page.wait_for_selector(selector_emitir, timeout=10000)
+            
+            # This action opens a NEW tab
+            with context.expect_page() as new_page_info:
+                page.click(selector_emitir)
+            
+            # Switch to the new tab
+            page = new_page_info.value
+            page.wait_for_load_state("networkidle")
+            print("[INFO] Botão 'Emitir NFS-e' clicado e nova aba detectada.")
+        except Exception as e:
+            print(f"[WARN] Falha na rota direta, tentando alternativa: {str(e)}")
+            try:
+                page.click("button:has-text('Entrar'), a:has-text('Entrar')")
+                page.wait_for_load_state("networkidle")
+            except:
+                pass
+
+        # Wait for login fields (CPF/Usuario and Password)
+        try:
+            # Check for IDs commonly used in this portal
+            page.wait_for_selector("#usuario, input[name='cpf'], input[placeholder*='Usuário']", timeout=20000)
+            
+            # Fill CPF/Usuario
+            if page.query_selector("#usuario"):
+                page.fill("#usuario", cpf)
+            elif page.query_selector("input[name='cpf']"):
+                page.fill("input[name='cpf']", cpf)
+            else:
+                page.fill("input[placeholder*='Usuário']", cpf)
+            
+            # Click Advance or Acessar depending on the screen
+            if page.query_selector("button:has-text('Avançar')"):
+                page.click("button:has-text('Avançar')")
+                time.sleep(1)
+
+            page.wait_for_selector("#senha, input[name='password'], input[type='password']", timeout=10000)
+            
+            if page.query_selector("#senha"):
+                page.fill("#senha", password)
+            elif page.query_selector("input[name='password']"):
+                page.fill("input[name='password']", password)
+            else:
+                page.fill("input[type='password']", password)
+                
+            page.click("button:has-text('Acessar'), button.btn-primary")
+        except Exception as e:
+            print(f"[ERROR] Falha ao localizar campos de login na aba ativa: {str(e)}")
+            page.screenshot(path=os.path.join(evidence_dir, "erro_login_aba.png"))
+            return
         
         # Handle "Ir para o sistema" landing page
         try:
-            page.wait_for_selector("button:has-text('Ir para o sistema')", timeout=5000)
+            page.wait_for_selector("button:has-text('Ir para o sistema')", timeout=10000)
             page.click("button:has-text('Ir para o sistema')")
+            print("[INFO] Botão 'Ir para o sistema' clicado.")
+            page.wait_for_load_state("networkidle")
         except:
             pass
             
         # 4. Handle Popups
         print("[INFO] Removendo avisos iniciais...")
-        # Wait for either the dashboard or a popup
-        page.wait_for_load_state("networkidle")
-        
-        # Close popups if they exist
-        popups = page.query_selector_all("button[aria-label='Close'], .modal-header .close, button:has-text('OK')")
+        time.sleep(2) # Give some time for SPA to settle
+        popups = page.query_selector_all("button[aria-label='Close'], .modal-header .close, button:has-text('OK'), .btn-close")
         for popup in popups:
             try:
-                popup.click()
-                time.sleep(1)
+                if popup.is_visible():
+                    popup.click()
+                    time.sleep(1)
             except:
                 pass
 
-        # 5. Select Company
+        # 5. Select Company SGR
         print("[INFO] Selecionando empresa SGR CONTABIL...")
-        page.fill("input[placeholder*='Pesquisar']", "SGR CONTABIL E ASSESSORIA LTDA")
-        # Wait for the table to filter and the arrow to appear
-        page.wait_for_selector("i.fa-arrow-right", timeout=10000)
-        page.click("i.fa-arrow-right")
-        
-        page.wait_for_load_state("networkidle")
-        
+        try:
+            # Wait for any input that looks like a search box
+            selector_busca = "input[placeholder*='Pesquisar'], #pesquisar, input[type='search']"
+            page.wait_for_selector(selector_busca, timeout=20000)
+            target_busca = page.locator(selector_busca).first
+            target_busca.fill("SGR CONTABIL E ASSESSORIA LTDA")
+            page.keyboard.press("Enter")
+            
+            # Wait for the entry arrow/button
+            page.wait_for_selector("i.fa-arrow-right, .btn-entrar-empresa", timeout=10000)
+            page.click("i.fa-arrow-right, .btn-entrar-empresa")
+            page.wait_for_load_state("networkidle")
+        except Exception as e_sgr:
+            print(f"[WARN] Falha ao selecionar SGR CONTABIL: {str(e_sgr)}")
+            page.screenshot(path=os.path.join(evidence_dir, "erro_sgr_contabil.png"))
+
         # 6. Batch Loop
         for index, row in df_execucao.iterrows():
             cnpj = str(row['CNPJ']).strip()
