@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime
 import re
+import json
 import pandas as pd
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
@@ -13,67 +14,88 @@ def emit_nfse_batch():
     # 1. Setup paths and Load Excel early
     current_dir = os.path.dirname(os.path.abspath(__file__))
     excel_path = os.path.join(current_dir, "clientes.xlsx")
+    checkpoint_path = os.path.join(current_dir, "progresso.json")
     
     if not os.path.exists(excel_path):
         print(f"[ERROR] Planilha não encontrada em: {excel_path}")
         return
         
     df = pd.read_excel(excel_path)
+    # Ensure CNPJ is string for comparison
+    df['CNPJ'] = df['CNPJ'].astype(str).str.strip()
     
+    # Check for previous progress
+    cnpj_concluidos = []
+    if os.path.exists(checkpoint_path):
+        print("\n" + "!"*40)
+        print("      RETOMADA DE EXECUÇÃO")
+        print("!"*40)
+        resumo = input("Encontrei uma execução anterior incompleta. Deseja continuar de onde parou? (S/N): ").strip().upper()
+        if resumo == 'S':
+            try:
+                with open(checkpoint_path, "r", encoding="utf-8") as f:
+                    cnpj_concluidos = json.load(f)
+                print(f"[INFO] Retomando. {len(cnpj_concluidos)} notas já foram emitidas.")
+            except:
+                print("[WARN] Erro ao ler progresso anterior. Iniciando do zero.")
+        else:
+            # If not resuming, we can delete the old checkpoint
+            try: os.remove(checkpoint_path)
+            except: pass
+    
+    # Filter pending clients for the menu and loop
+    df_pendentes = df[~df['CNPJ'].isin(cnpj_concluidos)].copy().reset_index(drop=True)
+    
+    if df_pendentes.empty:
+        print("[INFO] Não há notas pendentes para emitir. Se desejar reiniciar tudo, apague o arquivo 'progresso.json'.")
+        return
+
     # 2. Get Alíquota input
     print("\n" + "="*40)
     print("      CONFIGURAÇÃO DA AUTOMAÇÃO")
     print("="*40)
     aliquota = input("Por favor, digite a alíquota de ISS do mês (ex: 2.24): ").replace(',', '.')
     
-    # 3. Manual Overrides Menu
+    # 3. Manual Overrides Menu (only for pending clients)
     skip_indices = []
-    print("\nREVISÃO DE DADOS:")
-    opcao_alterar = input("Deseja alterar valores/descrições ou pular algum cliente este mês? (S/N): ").strip().upper()
+    print("\nREVISÃO DE DADOS (NOTAS PENDENTES):")
+    opcao_alterar = input("Deseja alterar valores/descrições ou pular algum cliente pendente? (S/N): ").strip().upper()
     
     if opcao_alterar == 'S':
         while True:
-            print("\nLISTA DE CLIENTES ATUAL:")
-            for i, row in df.iterrows():
+            print("\nLISTA DE CLIENTES PENDENTES:")
+            for i, row in df_pendentes.iterrows():
                 status = "[PULAR]" if i in skip_indices else "[OK]"
                 print(f"{i+1}. {status} {row['Nome da empresa']} - R$ {row['VALOR']}")
             
-            escolha = input("\nDigite o número do cliente para alterar, 'N' para remover/pular, ou 'F' para FINALIZAR e começar: ").strip().upper()
+            escolha = input("\nNúmero para editar, 'N' p/ remover, ou 'F' p/ FINALIZAR e começar: ").strip().upper()
             
             if escolha == 'F':
                 break
             
             try:
                 idx = int(escolha) - 1
-                if idx < 0 or idx >= len(df):
+                if idx < 0 or idx >= len(df_pendentes):
                     print("[!] Número inválido.")
                     continue
                 
-                print(f"\nEditando: {df.iloc[idx]['Nome da empresa']}")
-                acao = input("O que deseja fazer? (V = Alterar Valor, D = Alterar Descrição, P = Pular/Remover, C = Cancelar): ").strip().upper()
+                print(f"\nEditando: {df_pendentes.iloc[idx]['Nome da empresa']}")
+                acao = input("Ação? (V = Valor, D = Descrição, P = Pular, C = Cancelar): ").strip().upper()
                 
                 if acao == 'V':
-                    novo_valor = input(f"Novo valor (atual: {df.iloc[idx]['VALOR']}): ").strip()
-                    df.at[idx, 'VALOR'] = novo_valor
-                    print("[OK] Valor atualizado.")
+                    df_pendentes.at[idx, 'VALOR'] = input(f"Novo valor (atual: {df_pendentes.iloc[idx]['VALOR']}): ").strip()
                 elif acao == 'D':
-                    nova_desc = input(f"Nova descrição: ").strip()
-                    df.at[idx, 'Discriminação dos Serviços'] = nova_desc
-                    print("[OK] Descrição atualizada.")
+                    df_pendentes.at[idx, 'Discriminação dos Serviços'] = input(f"Nova descrição: ").strip()
                 elif acao == 'P':
-                    if idx not in skip_indices:
-                        skip_indices.append(idx)
-                        print("[OK] Cliente marcado para PULAR.")
-                    else:
-                        skip_indices.remove(idx)
-                        print("[OK] Cliente REATIVADO.")
+                    if idx not in skip_indices: skip_indices.append(idx)
+                    else: skip_indices.remove(idx)
             except ValueError:
-                print("[!] Entrada inválida. Use os números da lista ou as letras indicadas.")
+                print("[!] Entrada inválida.")
 
-    # Remove skipped clients
-    df = df.drop(skip_indices).reset_index(drop=True)
+    # Remove skipped clients from pending list
+    df_execucao = df_pendentes.drop(skip_indices).reset_index(drop=True)
     
-    if df.empty:
+    if df_execucao.empty:
         print("[INFO] Nenhum cliente restou para processar. Encerrando.")
         return
 
@@ -137,7 +159,7 @@ def emit_nfse_batch():
         page.wait_for_load_state("networkidle")
         
         # 6. Batch Loop
-        for index, row in df.iterrows():
+        for index, row in df_execucao.iterrows():
             cnpj = str(row['CNPJ']).strip()
             # Clean value (handle strings and numbers)
             raw_valor = row['VALOR']
@@ -224,6 +246,12 @@ def emit_nfse_batch():
 
                     page.click("button:has-text('Não')")
                     print(f"[SUCCESS] Nota {numero_nota} emitida para {nome_empresa}")
+                    
+                    # 6.1 Save Progress
+                    cnpj_concluidos.append(cnpj)
+                    with open(checkpoint_path, "w", encoding="utf-8") as f:
+                        json.dump(cnpj_concluidos, f)
+                    
                     # Safety wait before next loop
                     time.sleep(2)
                 except Exception as e:
@@ -258,6 +286,12 @@ def emit_nfse_batch():
                 for nota in relatorio_notas:
                     f.write(f"{nota['empresa'][:40]:<40} | {nota['valor']:<10} | {nota['numero']:<10}\n")
             print(f"\n[INFO] Relatório salvo em: {relatorio_file}")
+            
+            # 8. Cleanup Progress if successful
+            try:
+                if os.path.exists(checkpoint_path):
+                    os.remove(checkpoint_path)
+            except: pass
         else:
             print("[INFO] Nenhuma nota foi emitida com sucesso nesta sessão.")
         print("="*60)
