@@ -28,26 +28,26 @@ def emit_nfse_batch():
     cnpj_concluidos = []
     if os.path.exists(checkpoint_path):
         print("\n" + "!"*40)
-        print("      RETOMADA DE EXECUÇÃO")
+        print("      HISTÓRICO DE EMISSÕES")
         print("!"*40)
-        resumo = input("Encontrei uma execução anterior incompleta. Deseja continuar de onde parou? (S/N): ").strip().upper()
+        resumo = input("Encontrei notas já emitidas anteriormente. Deseja CONTINUAR de onde parou? (S/N): ").strip().upper()
         if resumo == 'S':
             try:
                 with open(checkpoint_path, "r", encoding="utf-8") as f:
                     cnpj_concluidos = json.load(f)
-                print(f"[INFO] Retomando. {len(cnpj_concluidos)} notas já foram emitidas.")
+                print(f"[INFO] Resumindo lote. {len(cnpj_concluidos)} CNPJs serão pulados.")
             except:
                 print("[WARN] Erro ao ler progresso anterior. Iniciando do zero.")
         else:
-            # If not resuming, we can delete the old checkpoint
+            print("[INFO] Iniciando novo lote (histórico descartado).")
             try: os.remove(checkpoint_path)
             except: pass
     
-    # Filter pending clients for the menu and loop
+    # Filter pending clients
     df_pendentes = df[~df['CNPJ'].isin(cnpj_concluidos)].copy().reset_index(drop=True)
     
     if df_pendentes.empty:
-        print("[INFO] Não há notas pendentes para emitir. Se desejar reiniciar tudo, apague o arquivo 'progresso.json'.")
+        print("[INFO] Todas as notas da planilha já foram emitidas conforme o histórico.")
         return
 
     # 2. Get Alíquota input
