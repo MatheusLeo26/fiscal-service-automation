@@ -199,17 +199,22 @@ def emit_nfse_batch():
                 try:
                     # The button usually says 'Não' for visualization
                     # Take success screenshot
-                    page.screenshot(path=os.path.join(evidence_dir, f"sucesso_{cnpj}.png"))
-                    
-                    # Wait for stability before reading text
+                    # Capture Note Number first to use in screenshot name
                     page.wait_for_load_state("networkidle")
-                    
                     try:
                         texto_confirmacao = page.inner_text("body")
                         match = re.search(r"número:\s*(\d+)", texto_confirmacao, re.IGNORECASE)
-                        numero_nota = match.group(1) if match else "N/A"
+                        numero_nota = match.group(1) if match else "Desconhecido"
                     except:
-                        numero_nota = "Não capturado"
+                        numero_nota = "Nao_Capturado"
+
+                    # Clean company name for safe filename
+                    nome_seguro = re.sub(r'[\\/*?:"<>|]', "", nome_empresa).replace(" ", "_")
+                    nome_screenshot = f"sucesso_Nota_{numero_nota}_{nome_seguro}.png"
+                    
+                    page.screenshot(path=os.path.join(evidence_dir, nome_screenshot))
+                    
+                    # (Texto já capturado acima)
 
                     relatorio_notas.append({
                         "empresa": nome_empresa,
