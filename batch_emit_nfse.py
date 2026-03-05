@@ -212,129 +212,271 @@ def emit_nfse_batch():
         # 5. Select Company SGR
         print("[INFO] Selecionando empresa SGR CONTABIL...")
         try:
-            # Wait for any input that looks like a search box
+            # Check for 404 or profile screen
+            if "Página não encontrada" in page.content():
+                print("[WARN] 404 detectado. Tentando recarregar...")
+                page.goto("https://itu.giss.com.br/portal/home#/login-portal?pageRedirect=emitir-nfs")
+                page.wait_for_load_state("networkidle")
+
             selector_busca = "input[placeholder*='Pesquisar'], #pesquisar, input[type='search']"
             page.wait_for_selector(selector_busca, timeout=20000)
             target_busca = page.locator(selector_busca).first
             target_busca.fill("SGR CONTABIL E ASSESSORIA LTDA")
             page.keyboard.press("Enter")
+            time.sleep(2) # Wait for table update
             
-            # Wait for the entry arrow/button
-            page.wait_for_selector("i.fa-arrow-right, .btn-entrar-empresa", timeout=10000)
-            page.click("i.fa-arrow-right, .btn-entrar-empresa")
-            page.wait_for_load_state("networkidle")
+            # Selector for the specific button based on DOM inspection
+            selector_seta = "button[title='Selecionar Empresa'], i.fa-arrow-right, .btn-entrar-empresa"
+            page.wait_for_selector(selector_seta, timeout=10000)
+            print("[INFO] Clicando na 'setinha azul' de seleção (botão)...")
+            
+            # Use locator for a more precise click
+            page.locator(selector_seta).first.click()
+            
+            # CRITICAL: Wait for the specific target URL or page content
+            print("[INFO] Aguardando transição para o painel de emissão...")
+            try:
+                page.wait_for_url("**/operacao/servicos-prestados/emitir-nfse", timeout=20000)
+                page.wait_for_load_state("networkidle")
+            except:
+                print("[WARN] URL esperada não carregou no tempo previsto. Verificando conteúdo...")
+                if "Página não encontrada" in page.content():
+                    print("[ERROR] 404 após clique na seta. Forçando navegação...")
+                    page.goto("https://itu.giss.com.br/portal/home#/operacao/servicos-prestados/emitir-nfse")
+                    page.wait_for_load_state("networkidle")
+
         except Exception as e_sgr:
             print(f"[WARN] Falha ao selecionar SGR CONTABIL: {str(e_sgr)}")
             page.screenshot(path=os.path.join(evidence_dir, "erro_sgr_contabil.png"))
 
         # 6. Batch Loop
         for index, row in df_execucao.iterrows():
+            # Dynamic mapping to handle encoding issues in column names
+            col_empresa = [c for c in df_execucao.columns if 'empresa' in c or 'RAZAO' in c][0]
+            col_descricao = [c for c in df_execucao.columns if 'Discrimina' in c][0]
+            
             cnpj = str(row['CNPJ']).strip()
-            # Clean value (handle strings and numbers)
             raw_valor = row['VALOR']
             if isinstance(raw_valor, (int, float)):
-                # Use dot for backend fill, format to 2 decimal places
                 valor = f"{float(raw_valor):.2f}"
             else:
-                # String cleanup: R$ 3.000,00 -> 3000.00
                 valor = str(raw_valor).replace('R$', '').replace('.', '').replace(',', '.').strip()
             
-            descricao = str(row['Discriminação dos Serviços']).strip()
-            nome_empresa = str(row['Nome da empresa']).strip()
+            nome_empresa = str(row[col_empresa]).strip()
+            descricao = str(row[col_descricao]).strip()
             
-            print(f"\n[PROCESS] Emitindo nota ({index+1}/{len(df)}): {nome_empresa} ({cnpj})")
+            print(f"\n[PROCESS] Emitindo nota ({index+1}/{len(df_execucao)}): {nome_empresa} ({cnpj})")
+            print(f"[INFO] Dados da Planilha: Valor=R$ {valor}, Descrição='{descricao[:30]}...'")
             
             try:
-                # Ensure we are in a clean state (Dashboard) or navigate via top menu
-                page.locator("text=Serviços Prestados").click()
-                page.locator("text=Emitir NFS-e").click()
-                
-                # Fill form
-                page.wait_for_selector("select[name='atividade']", timeout=10000)
-                page.select_option("select[name='atividade']", label="ATIVIDADES DE CONTABILIDADE")
-                
-                # NBS select
-                page.fill("input[placeholder*='NBS']", "SERVIÇOS DE CONTABILIDADE")
-                time.sleep(1)
-                page.keyboard.press("Enter")
-                
-                # Tomador
-                page.fill("input[name='cnpjTomador']", cnpj)
-                page.click("button:has-text('Pesquisar')")
-                
-                # Wait for search results and try to click the company name
-                # Using a broad selector that matches the company name text
-                page.wait_for_selector(f"text={nome_empresa}", timeout=15000)
-                page.click(f"text={nome_empresa}")
-                
-                # Values and Description
-                page.wait_for_selector("input[name='valorServico']", timeout=10000)
-                page.fill("input[name='valorServico']", valor)
-                page.fill("textarea[name='discriminacao']", descricao)
-                page.select_option("select[name='pisCofins']", label="NENHUM")
-                
-                # Next Step
-                page.click("button:has-text('Próximo')")
-                
-                # Alíquota Step
-                page.wait_for_selector("input[name='aliquota']", timeout=10000)
-                page.fill("input[name='aliquota']", aliquota)
-                page.click("button:has-text('Próximo')")
-                
-                # Review and Concluir
-                page.wait_for_selector("button:has-text('Concluir')", timeout=10000)
-                page.click("button:has-text('Concluir')")
-                
-                # Handle "Deseja visualizar a nota?" popup
-                print("[INFO] Nota enviada. Aguardando confirmação...")
-                try:
-                    # The button usually says 'Não' for visualization
-                    # Take success screenshot
-                    # Capture Note Number first to use in screenshot name
+                # Check if we are already on the emission page (via URL or header)
+                if "/emitir-nfse" not in page.url:
+                    print("[INFO] Navegando para o menu de emissão...")
+                    page.locator("text=Serviços Prestados").click()
+                    page.locator("text=Emitir NFS-e").click()
                     page.wait_for_load_state("networkidle")
-                    try:
-                        texto_confirmacao = page.inner_text("body")
-                        match = re.search(r"número:\s*(\d+)", texto_confirmacao, re.IGNORECASE)
-                        numero_nota = match.group(1) if match else "Desconhecido"
-                    except:
-                        numero_nota = "Nao_Capturado"
-
-                    # Clean company name for safe filename
-                    nome_seguro = re.sub(r'[\\/*?:"<>|]', "", nome_empresa).replace(" ", "_")
-                    nome_screenshot = f"sucesso_Nota_{numero_nota}_{nome_seguro}.png"
-                    
-                    page.screenshot(path=os.path.join(evidence_dir, nome_screenshot))
-                    
-                    # (Texto já capturado acima)
-
-                    relatorio_notas.append({
-                        "empresa": nome_empresa,
-                        "valor": valor,
-                        "numero": numero_nota
-                    })
-
-                    page.click("button:has-text('Não')")
-                    print(f"[SUCCESS] Nota {numero_nota} emitida para {nome_empresa}")
-                    
-                    # 6.1 Save Progress
-                    cnpj_concluidos.append(cnpj)
-                    with open(checkpoint_path, "w", encoding="utf-8") as f:
-                        json.dump(cnpj_concluidos, f)
-                    
-                    # Safety wait before next loop
-                    time.sleep(2)
-                except Exception as e:
-                    print(f"[WARN] Erro ao confirmar sucesso ou clicar em 'Não': {str(e)}")
-                    # Take screenshot to verify state
-                    page.screenshot(path=os.path.join(evidence_dir, f"verificar_{cnpj}.png"))
+                else:
+                    print("[INFO] Já está na página de emissão. Prosseguindo...")
                 
-            except Exception as e:
-                print(f"[ERROR] Falha ao processar {nome_empresa}: {str(e)}")
-                page.screenshot(path=os.path.join(evidence_dir, f"erro_{cnpj}.png"))
-                # Try to force navigation back to home menu to resume with next
-                page.goto("https://itu.giss.com.br/portal/home#/dashboard")
+                # EMISSION SEQUENCE (12 PASSOS)
+                print(f"[INFO] Processando Tomador: {nome_empresa} ({cnpj})")
+
+                # Passo 1: Serviço / Atividade
+                print("[INFO] Passo 1: Selecionando Atividade...")
+                try:
+                    # Specific ID found by subagent
+                    selector_atividade = "select#atividadeServico, select[name='atividadeServico'], select[name='atividade']"
+                    page.wait_for_selector(f"{selector_atividade} option", timeout=20000)
+                    
+                    # Try to select by label precisely
+                    page.select_option(selector_atividade, label="17.19 / 692060100 - ATIVIDADES DE CONTABILIDADE")
+                except Exception as e_step1:
+                    print(f"[WARN] Falha na seleção por label: {str(e_step1)}. Tentando por índice...")
+                    page.select_option("select#atividadeServico", index=3) # Fallback
+
+                # Passo 2: NBS (Só após passo 1)
+                print("[INFO] Passo 2: Selecionando NBS (Apenas clique)...")
+                time.sleep(3) # Wait for site to react to Step 1
+                
+                # Click field to open the Angular dropdown
+                selector_nbs_input = "#ibs_nbs_value, input[name='nbsAuto'], input[placeholder*='NBS']"
+                page.wait_for_selector(selector_nbs_input, timeout=15000)
+                page.locator(selector_nbs_input).scroll_into_view_if_needed()
+                page.click(selector_nbs_input)
+                
+                # Wait for the specific dropdown row to appear
+                print("[INFO] Aguardando lista NBS aparecer...")
+                # The user specifically mentioned the text "1.1302.21.00 Serviços de contabilidade"
+                selector_nbs_option = ".angucomplete-row:has-text('1.1302.21.00'), .angucomplete-row:has-text('Serviços de contabilidade')"
+                try:
+                    page.wait_for_selector(selector_nbs_option, timeout=10000)
+                    page.locator(selector_nbs_option).first.scroll_into_view_if_needed()
+                    page.locator(selector_nbs_option).first.click()
+                    print("[INFO] NBS selecionado com sucesso via clique.")
+                except Exception as e_nbs:
+                    print(f"[WARN] Lista NBS não expandiu. Tentando clique forçado...")
+                    page.click(selector_nbs_input, force=True)
+                    time.sleep(2)
+                    page.locator(selector_nbs_option).first.click()
+
+                # Passo 3: Dados do Tomador de Serviço
+                print(f"[INFO] Passo 3: Pesquisando Tomador: {cnpj}...")
+                selector_busca_tomador = "input#buscarTomador, input[name='cnpjTomador'], input[placeholder*='Pesquisar']"
+                page.wait_for_selector(selector_busca_tomador, timeout=10000)
+                page.fill(selector_busca_tomador, cnpj)
+                page.click("button:has-text('Pesquisar')")
                 time.sleep(3)
-            
+                
+                # Clicar no nome do tomador na lista de resultados
+                selector_tomador_link = f"xpath=//*[contains(text(), '{nome_empresa}') or contains(text(), '{cnpj.strip()}')]"
+                page.wait_for_selector(selector_tomador_link, timeout=15000)
+                page.locator(selector_tomador_link).first.click()
+                print("[INFO] Tomador selecionado.")
+
+                # Passo 4: Valor do Serviço
+                print(f"[INFO] Passo 4: Preenchendo Valor (R$ {valor})...")
+                selector_valor = "input#valorServico, input[name='valorServico']"
+                page.wait_for_selector(selector_valor, timeout=10000)
+                page.fill(selector_valor, valor)
+
+                # Passo 5: Discriminação do Serviço
+                print("[INFO] Passo 5: Preenchendo Descrição...")
+                selector_desc = "textarea#discriminacaoServico, textarea[name='discriminacao']"
+                page.wait_for_selector(selector_desc, timeout=10000)
+                page.locator(selector_desc).scroll_into_view_if_needed()
+                page.fill(selector_desc, descricao)
+
+                # Passo 6: Situação Tributária do PIS/COFINS
+                print("[INFO] Passo 6: Selecionando PIS/COFINS (Nenhum)...")
+                selector_pis = "select#cstPisCofins, select[name='pisCofins']"
+                page.wait_for_selector(selector_pis, timeout=10000)
+                page.locator(selector_pis).scroll_into_view_if_needed()
+                
+                # Use JS to ensure selection in Angular
+                page.evaluate("""(sel) => {
+                    const el = document.querySelector(sel);
+                    if (el) {
+                        el.value = '00';
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }""", selector_pis)
+                
+                # Fallback standard selection
+                try:
+                    page.select_option(selector_pis, value="00")
+                except:
+                    pass
+
+                # Passo 7: Clicar em "Próximo"
+                print("[INFO] Passo 7: Clicando em Próximo...")
+                page.locator("button:has-text('Próximo')").scroll_into_view_if_needed()
+                page.click("button:has-text('Próximo')")
+
+                # Passo 8: Alíquota
+                print(f"[INFO] Passo 8: Preenchendo Alíquota ({aliquota})...")
+                # Using ID found by subagent
+                selector_aliq = "input#aliquotaValor, input[name='aliquota']"
+                page.wait_for_selector(selector_aliq, timeout=10000)
+                page.locator(selector_aliq).scroll_into_view_if_needed()
+                
+                # Critical: Clear field first (Ctrl+A + Backspace) as per site mask
+                page.click(selector_aliq)
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Backspace")
+                
+                # Fill clean value
+                aliquota_limpa = aliquota.replace(",", ".")
+                page.type(selector_aliq, aliquota_limpa)
+                time.sleep(1)
+                print(f"[INFO] Alíquota '{aliquota_limpa}' inserida.")
+
+                # Passo 9: Clicar em "Próximo"
+                print("[INFO] Passo 9: Clicando em Próximo...")
+                page.locator("button:has-text('Próximo')").scroll_into_view_if_needed()
+                page.click("button:has-text('Próximo')")
+
+                # Passo 10: Clicar em "Concluir"
+                print("[INFO] Passo 10: Clicando em Concluir...")
+                page.wait_for_selector("button:has-text('Concluir')", timeout=15000)
+                page.locator("button:has-text('Concluir')").scroll_into_view_if_needed()
+                page.click("button:has-text('Concluir')")
+
+                # Passo 11: Clicar em "Não" (visualização)
+                print("[INFO] Passo 11: Finalizando confirmação...")
+                page.wait_for_load_state("networkidle")
+                
+                # Captura de número da nota antes de fechar o modal
+                try:
+                    texto_completo = page.inner_text("body")
+                    match = re.search(r"número:\s*(\d+)", texto_completo, re.IGNORECASE)
+                    numero_nota = match.group(1) if match else "Desconhecido"
+                except:
+                    numero_nota = "Confirmado"
+
+                # Evidência de sucesso
+                if not page.is_closed():
+                    path_sucesso = os.path.join(evidence_dir, f"sucesso_Nota_{numero_nota}_{cnpj}.png")
+                    page.screenshot(path=path_sucesso)
+
+                try:
+                    page.locator("button:has-text('Não'), button.btn-default:has-text('Não')").scroll_into_view_if_needed()
+                    page.click("button:has-text('Não'), button.btn-default:has-text('Não')")
+                    time.sleep(2)
+                except:
+                    print("[WARN] Não foi necessário clicar em 'Não' ou timeout.")
+
+                # Passo 12: Reinício do Loop via Menu Lateral
+                print(f"[SUCCESS] Nota para {nome_empresa} emitida com sucesso!")
+                print("[INFO] Passo 12: Retornando ao menu para próxima emissão...")
+                
+                # Update progress
+                cnpj_concluidos.append(cnpj)
+                with open(checkpoint_path, "w", encoding="utf-8") as f:
+                    json.dump(cnpj_concluidos, f)
+                
+                relatorio_notas.append({
+                    "empresa": nome_empresa,
+                    "valor": valor,
+                    "numero": numero_nota
+                })
+                
+                # NAVIGATION SEQUENCE FROM IMAGES
+                try:
+                    # 1. Click "Serviços Prestados" in left sidebar
+                    sidebar_selector = "text=Serviços Prestados, .menu-item:has-text('Serviços Prestados')"
+                    print("[INFO] Clicando em 'Serviços Prestados' no menu lateral...")
+                    page.locator(sidebar_selector).scroll_into_view_if_needed()
+                    page.click(sidebar_selector)
+                    time.sleep(1)
+                    
+                    # 2. Click "Emitir NFS-e" card/link
+                    emitir_selector = "text=Emitir NFS-e, .card-body:has-text('Emitir NFS-e')"
+                    print("[INFO] Clicando em 'Emitir NFS-e' para iniciar novo formulário...")
+                    page.locator(emitir_selector).scroll_into_view_if_needed()
+                    page.click(emitir_selector)
+                    
+                    page.wait_for_load_state("networkidle")
+                    print("[INFO] Próximo cliente em 3 segundos...")
+                    time.sleep(3)
+                except Exception as e_nav:
+                    print(f"[WARN] Falha na navegação pelo menu: {str(e_nav)}. Tentando recarregar rota...")
+                    page.goto("https://itu.giss.com.br/portal/home#/operacao/servicos-prestados/emitir-nfse")
+                    page.wait_for_load_state("networkidle")
+
+            except Exception as e_inner:
+                print(f"[ERROR] Erro fatal no lote para {nome_empresa}: {str(e_inner)}")
+                try:
+                    if not page.is_closed():
+                        page.screenshot(path=os.path.join(evidence_dir, f"erro_{cnpj}.png"))
+                except:
+                    pass
+                # Recovery
+                try:
+                    if not page.is_closed():
+                        page.goto("https://itu.giss.com.br/portal/home#/operacao/servicos-prestados/emitir-nfse")
+                except:
+                    break 
+
         # 7. Final Report
         print("\n" + "="*60)
         print("              RELATÓRIO FINAL DE EMISSÕES")
