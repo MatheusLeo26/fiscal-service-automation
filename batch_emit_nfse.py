@@ -10,21 +10,78 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def emit_nfse_batch():
-    # 1. Get Alíquota input
+    # 1. Setup paths and Load Excel early
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    excel_path = os.path.join(current_dir, "clientes.xlsx")
+    
+    if not os.path.exists(excel_path):
+        print(f"[ERROR] Planilha não encontrada em: {excel_path}")
+        return
+        
+    df = pd.read_excel(excel_path)
+    
+    # 2. Get Alíquota input
+    print("\n" + "="*40)
+    print("      CONFIGURAÇÃO DA AUTOMAÇÃO")
+    print("="*40)
     aliquota = input("Por favor, digite a alíquota de ISS do mês (ex: 2.24): ").replace(',', '.')
     
-    # 2. Setup Evidence Folder
-    # Path is now dynamic (relative to this script's location)
-    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 3. Manual Overrides Menu
+    skip_indices = []
+    print("\nREVISÃO DE DADOS:")
+    opcao_alterar = input("Deseja alterar valores/descrições ou pular algum cliente este mês? (S/N): ").strip().upper()
+    
+    if opcao_alterar == 'S':
+        while True:
+            print("\nLISTA DE CLIENTES ATUAL:")
+            for i, row in df.iterrows():
+                status = "[PULAR]" if i in skip_indices else "[OK]"
+                print(f"{i+1}. {status} {row['Nome da empresa']} - R$ {row['VALOR']}")
+            
+            escolha = input("\nDigite o número do cliente para alterar, 'N' para remover/pular, ou 'F' para FINALIZAR e começar: ").strip().upper()
+            
+            if escolha == 'F':
+                break
+            
+            try:
+                idx = int(escolha) - 1
+                if idx < 0 or idx >= len(df):
+                    print("[!] Número inválido.")
+                    continue
+                
+                print(f"\nEditando: {df.iloc[idx]['Nome da empresa']}")
+                acao = input("O que deseja fazer? (V = Alterar Valor, D = Alterar Descrição, P = Pular/Remover, C = Cancelar): ").strip().upper()
+                
+                if acao == 'V':
+                    novo_valor = input(f"Novo valor (atual: {df.iloc[idx]['VALOR']}): ").strip()
+                    df.at[idx, 'VALOR'] = novo_valor
+                    print("[OK] Valor atualizado.")
+                elif acao == 'D':
+                    nova_desc = input(f"Nova descrição: ").strip()
+                    df.at[idx, 'Discriminação dos Serviços'] = nova_desc
+                    print("[OK] Descrição atualizada.")
+                elif acao == 'P':
+                    if idx not in skip_indices:
+                        skip_indices.append(idx)
+                        print("[OK] Cliente marcado para PULAR.")
+                    else:
+                        skip_indices.remove(idx)
+                        print("[OK] Cliente REATIVADO.")
+            except ValueError:
+                print("[!] Entrada inválida. Use os números da lista ou as letras indicadas.")
+
+    # Remove skipped clients
+    df = df.drop(skip_indices).reset_index(drop=True)
+    
+    if df.empty:
+        print("[INFO] Nenhum cliente restou para processar. Encerrando.")
+        return
+
+    # 4. Setup Evidence Folder
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     evidence_dir = os.path.join(current_dir, "evidencias", f"execucao_{timestamp}")
     os.makedirs(evidence_dir, exist_ok=True)
-    print(f"[INFO] Pasta de evidências criada: {evidence_dir}")
-
-    # 3. Load Excel data
-    # Path is now dynamic (relative to this script's location)
-    excel_path = os.path.join(current_dir, "clientes.xlsx")
-    df = pd.read_excel(excel_path)
+    print(f"\n[INFO] Pasta de evidências criada: {evidence_dir}")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False) # Change to True later if preferred
