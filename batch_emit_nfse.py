@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 # Load credentials from .env
 load_dotenv()
 
+# Configurações de Execução
+SALVAR_EVIDENCIA_ERRO = True # Guardar fotos de erro para ajudar no suporte (Sugerido: True)
+
 def emit_nfse_batch():
     # 1. Setup paths and Load Excel early
     current_dir = os.path.dirname(os.path.abspath(__file__))
