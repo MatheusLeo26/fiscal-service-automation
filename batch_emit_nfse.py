@@ -297,28 +297,27 @@ def emit_nfse_batch():
                     selector_atividade = "select#atividadeServico, select[name='atividadeServico'], select[name='atividade']"
                     page.wait_for_selector(f"{selector_atividade} option", timeout=20000)
                     
-                    # Busca dinâmica pela atividade correta
-                    opcoes_locators = page.locator(f"{selector_atividade} option")
+                    # Busca dinâmica pela atividade correta usando JavaScript puro para contornar problemas de visibilidade do HTMLOptionElement
+                    target_value = page.evaluate('''() => {
+                        const select = document.querySelector("select#atividadeServico") || 
+                                       document.querySelector("select[name='atividadeServico']") || 
+                                       document.querySelector("select[name='atividade']");
+                        if (!select) return null;
+                        for (let i = 0; i < select.options.length; i++) {
+                            const text = select.options[i].text;
+                            if (text.includes("17.19") || text.includes("CONTABILIDADE")) {
+                                return select.options[i].value;
+                            }
+                        }
+                        return null;
+                    }''')
                     
-                    # We have to get all options as a list to iterate them properly in Playwright
-                    if opcoes_locators.count() > 0:
-                        textos = opcoes_locators.all_inner_texts()
-                        selecionado = False
-                        
-                        for idx, texto in enumerate(textos):
-                            if "17.19" in texto or "CONTABILIDADE" in texto:
-                                # Pegar o valor pelo indice exato que deu match
-                                valor_correto = opcoes_locators.nth(idx).get_attribute("value")
-                                page.select_option(selector_atividade, value=valor_correto)
-                                selecionado = True
-                                print(f"[INFO] Atividade selecionada dinamicamente: {texto.strip()}")
-                                break
-                                
-                        if not selecionado:
-                            print("[WARN] Não achou '17.19' dinamicamente, tentando índice fixo...")
-                            page.select_option(selector_atividade, index=3) # Fallback histórico
+                    if target_value:
+                        page.select_option(selector_atividade, value=target_value)
+                        print(f"[INFO] Atividade selecionada por valor ({target_value}) via JS.")
                     else:
-                        print("[WARN] Nenhuma opção encontrada no select da Atividade.")
+                        print("[WARN] JS não achou '17.19'. Tentando Fallback para índice fixo...")
+                        page.select_option(selector_atividade, index=3)
                         
                 except Exception as e_step1:
                     print(f"[ERROR] Falha na seleção da Atividade: {str(e_step1)}. Isso pode quebrar os próximos passos.")
