@@ -354,33 +354,30 @@ def emit_nfse_batch():
                 page.locator(selector_busca_tomador).scroll_into_view_if_needed()
                 page.fill(selector_busca_tomador, cnpj)
                 
-                print("[INFO] Clicando no botão Pesquisar e aguardando cascata...")
+                print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
                 btn_pesquisar = page.locator("button:has-text('Pesquisar')").first
+                btn_pesquisar.scroll_into_view_if_needed() # Centraliza o botão
                 btn_pesquisar.click()
-                time.sleep(2) # Aguarda a lista Angular aparecer em cascata
+                time.sleep(3) # Aguarda retorno da pesquisa
                 
-                print("[INFO] Descendo a tela e buscando a opção na lista do tomador...")
-                # Scroll para garantir que a lista cascata está no meio da tela
-                page.mouse.wheel(0, 150)
-                time.sleep(1)
-                
+                print("[INFO] Buscando nome da empresa na lista de resultados...")
+                # Pegar o primeiro nome para pesquisa genérica em caso de nomes muito longos ou diferentes
                 nome_curto = nome_empresa.split()[0] if nome_empresa else cnpj.strip()
-                # Procura a linha da cascata correspondente ao CNPJ ou ao NOME
-                selector_cascata = f".angucomplete-row:has-text('{cnpj.strip()}'), .angucomplete-row:has-text('{nome_curto}')"
+                
+                # Procura frouxa pelo nome, pelo CNPJ ou pelo primeiro nome
+                selector_tomador_link = f"xpath=//*[contains(text(), '{cnpj.strip()}')] | xpath=//a[contains(text(), '{nome_curto}')] | xpath=//*[contains(text(), '{nome_curto}')]"
                 
                 try:
-                    page.wait_for_selector(selector_cascata, timeout=10000)
-                    linha_cascata = page.locator(selector_cascata).first
-                    linha_cascata.click()
-                    print("[INFO] Cliente selecionado na lista em cascata com sucesso!")
-                except Exception as e_cascata:
-                    print(f"[WARN] Cascata não abriu ou não achou o nome exato. Tentando fallback pelo texto visível: {str(e_cascata)}")
-                    try:
-                        fallback = page.get_by_text(cnpj.strip(), exact=False).first
-                        fallback.click()
-                        print("[INFO] Tomador selecionado pelo texto visível (Fallback)")
-                    except Exception as e_fallback:
-                        print(f"[ERROR] Impossível clicar no tomador na cascata: {e_fallback}. Seguindo preenchimento...")
+                    page.wait_for_selector(selector_tomador_link, timeout=15000)
+                    link_resultado = page.locator(selector_tomador_link).first
+                    link_resultado.scroll_into_view_if_needed() # Centraliza a linha de resultado
+                    link_resultado.click()
+                    print("[INFO] Tomador selecionado com sucesso.")
+                except Exception as e_tomador:
+                    print(f"[WARN] Falha na seleção primária: {str(e_tomador)}. Tentando fallback pelo texto exato do CNPJ...")
+                    fallback = page.get_by_text(cnpj.strip(), exact=False).first
+                    fallback.scroll_into_view_if_needed()
+                    fallback.click()
                 
                 time.sleep(2) # Aguarda o painel inferior de valores carregar
 
