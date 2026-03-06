@@ -333,31 +333,34 @@ def emit_nfse_batch():
                 selector_busca_tomador = "input#buscarTomador, input[name='cnpjTomador'], input[placeholder*='Pesquisar'], input[placeholder*='Tomador']"
                 page.wait_for_selector(selector_busca_tomador, timeout=10000)
                 page.locator(selector_busca_tomador).scroll_into_view_if_needed()
-                page.fill(selector_busca_tomador, "") # Clear first
-                page.type(selector_busca_tomador, cnpj, delay=100) # Type slowly to trigger autocomplete
-                time.sleep(2) # Give Angular time to fetch
+                page.fill(selector_busca_tomador, cnpj)
                 
-                # Clicar no nome do tomador na lista de resultados (Autocomplete dropdown)
-                print("[INFO] Aguardando lista de sugestões do Tomador...")
+                print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
+                btn_pesquisar = page.locator("button:has-text('Pesquisar')").first
+                btn_pesquisar.scroll_into_view_if_needed() # Centraliza o botão
+                btn_pesquisar.click()
+                time.sleep(3) # Aguarda retorno da pesquisa
+                
+                print("[INFO] Buscando nome da empresa na lista de resultados...")
+                # Pegar o primeiro nome para pesquisa genérica em caso de nomes muito longos ou diferentes
+                nome_curto = nome_empresa.split()[0] if nome_empresa else cnpj.strip()
+                
+                # Procura frouxa pelo nome, pelo CNPJ ou pelo primeiro nome
+                selector_tomador_link = f"xpath=//*[contains(text(), '{cnpj.strip()}')] | xpath=//a[contains(text(), '{nome_curto}')] | xpath=//*[contains(text(), '{nome_curto}')]"
+                
                 try:
-                    # Look for the angucomplete dropdown element containing the CNPJ or Name
-                    selector_tomador_sugestao = f".angucomplete-row:has-text('{cnpj.strip()}'), .angucomplete-row:has-text('{nome_empresa}')"
-                    page.wait_for_selector(selector_tomador_sugestao, timeout=10000)
-                    page.locator(selector_tomador_sugestao).first.scroll_into_view_if_needed()
-                    page.locator(selector_tomador_sugestao).first.click()
-                    print("[INFO] Tomador selecionado na lista suspensa.")
+                    page.wait_for_selector(selector_tomador_link, timeout=15000)
+                    link_resultado = page.locator(selector_tomador_link).first
+                    link_resultado.scroll_into_view_if_needed() # Centraliza a linha de resultado
+                    link_resultado.click()
+                    print("[INFO] Tomador selecionado com sucesso.")
                 except Exception as e_tomador:
-                    print(f"[WARN] Lista de sugestão específica não encontrada. Tentando primeira opção ou fallback... Detalhe: {e_tomador}")
-                    # Fallback: Just click the first autocomplete row that appears
-                    try:
-                        page.wait_for_selector(".angucomplete-row", timeout=5000)
-                        page.locator(".angucomplete-row").first.click()
-                        print("[INFO] Primeira sugestão de Tomador selecionada via fallback.")
-                    except:
-                        print("[WARN] Nenhuma lista suspensa de Tomador apareceu. Tentando botão Pesquisar genérico...")
-                        page.click("button:has-text('Pesquisar')")
+                    print(f"[WARN] Falha na seleção primária: {str(e_tomador)}. Tentando fallback pelo texto exato do CNPJ...")
+                    fallback = page.get_by_text(cnpj.strip(), exact=False).first
+                    fallback.scroll_into_view_if_needed()
+                    fallback.click()
                 
-                time.sleep(2) # Wait for page to process the selection and reveal lower fields
+                time.sleep(2) # Aguarda o painel inferior de valores carregar
 
                 # Passo 4: Valor do Serviço
                 print(f"[INFO] Passo 4: Preenchendo Valor (R$ {valor})...")
