@@ -297,24 +297,29 @@ def emit_nfse_batch():
                     selector_atividade = "select#atividadeServico, select[name='atividadeServico'], select[name='atividade']"
                     page.wait_for_selector(f"{selector_atividade} option", timeout=20000)
                     
-                try:
-                    # Busca dinâmica pela atividade correta para evitar selecionar índice errado
-                    opcoes = page.locator(f"{selector_atividade} option")
-                    count = opcoes.count()
-                    selecionado = False
+                    # Busca dinâmica pela atividade correta
+                    opcoes_locators = page.locator(f"{selector_atividade} option")
                     
-                    for i in range(count):
-                        texto = opcoes.nth(i).inner_text()
-                        if "17.19" in texto or "CONTABILIDADE" in texto:
-                            valor = opcoes.nth(i).get_attribute("value")
-                            page.select_option(selector_atividade, value=valor)
-                            selecionado = True
-                            print(f"[INFO] Atividade selecionada dinamicamente: {texto.strip()}")
-                            break
-                    
-                    if not selecionado:
-                        print("[WARN] Não achou '17.19' dinamicamente. Tentando label exato original...")
-                        page.select_option(selector_atividade, label="17.19 / 692060100 - ATIVIDADES DE CONTABILIDADE")
+                    # We have to get all options as a list to iterate them properly in Playwright
+                    if opcoes_locators.count() > 0:
+                        textos = opcoes_locators.all_inner_texts()
+                        selecionado = False
+                        
+                        for idx, texto in enumerate(textos):
+                            if "17.19" in texto or "CONTABILIDADE" in texto:
+                                # Pegar o valor pelo indice exato que deu match
+                                valor_correto = opcoes_locators.nth(idx).get_attribute("value")
+                                page.select_option(selector_atividade, value=valor_correto)
+                                selecionado = True
+                                print(f"[INFO] Atividade selecionada dinamicamente: {texto.strip()}")
+                                break
+                                
+                        if not selecionado:
+                            print("[WARN] Não achou '17.19' dinamicamente, tentando índice fixo...")
+                            page.select_option(selector_atividade, index=3) # Fallback histórico
+                    else:
+                        print("[WARN] Nenhuma opção encontrada no select da Atividade.")
+                        
                 except Exception as e_step1:
                     print(f"[ERROR] Falha na seleção da Atividade: {str(e_step1)}. Isso pode quebrar os próximos passos.")
 
@@ -350,30 +355,33 @@ def emit_nfse_batch():
                 page.locator(selector_busca_tomador).scroll_into_view_if_needed()
                 page.fill(selector_busca_tomador, cnpj)
                 
-                print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
+                print("[INFO] Clicando no botão Pesquisar e aguardando cascata...")
                 btn_pesquisar = page.locator("button:has-text('Pesquisar')").first
-                btn_pesquisar.scroll_into_view_if_needed() # Centraliza o botão
                 btn_pesquisar.click()
-                time.sleep(3) # Aguarda retorno da pesquisa
+                time.sleep(2) # Aguarda a lista Angular aparecer em cascata
                 
-                print("[INFO] Buscando nome da empresa na lista de resultados...")
-                # Pegar o primeiro nome para pesquisa genérica em caso de nomes muito longos ou diferentes
+                print("[INFO] Descendo a tela e buscando a opção na lista do tomador...")
+                # Scroll para garantir que a lista cascata está no meio da tela
+                page.mouse.wheel(0, 150)
+                time.sleep(1)
+                
                 nome_curto = nome_empresa.split()[0] if nome_empresa else cnpj.strip()
-                
-                # Procura frouxa pelo nome, pelo CNPJ ou pelo primeiro nome
-                selector_tomador_link = f"xpath=//*[contains(text(), '{cnpj.strip()}')] | xpath=//a[contains(text(), '{nome_curto}')] | xpath=//*[contains(text(), '{nome_curto}')]"
+                # Procura a linha da cascata correspondente ao CNPJ ou ao NOME
+                selector_cascata = f".angucomplete-row:has-text('{cnpj.strip()}'), .angucomplete-row:has-text('{nome_curto}')"
                 
                 try:
-                    page.wait_for_selector(selector_tomador_link, timeout=15000)
-                    link_resultado = page.locator(selector_tomador_link).first
-                    link_resultado.scroll_into_view_if_needed() # Centraliza a linha de resultado
-                    link_resultado.click()
-                    print("[INFO] Tomador selecionado com sucesso.")
-                except Exception as e_tomador:
-                    print(f"[WARN] Falha na seleção primária: {str(e_tomador)}. Tentando fallback pelo texto exato do CNPJ...")
-                    fallback = page.get_by_text(cnpj.strip(), exact=False).first
-                    fallback.scroll_into_view_if_needed()
-                    fallback.click()
+                    page.wait_for_selector(selector_cascata, timeout=10000)
+                    linha_cascata = page.locator(selector_cascata).first
+                    linha_cascata.click()
+                    print("[INFO] Cliente selecionado na lista em cascata com sucesso!")
+                except Exception as e_cascata:
+                    print(f"[WARN] Cascata não abriu ou não achou o nome exato. Tentando fallback pelo texto visível: {str(e_cascata)}")
+                    try:
+                        fallback = page.get_by_text(cnpj.strip(), exact=False).first
+                        fallback.click()
+                        print("[INFO] Tomador selecionado pelo texto visível (Fallback)")
+                    except Exception as e_fallback:
+                        print(f"[ERROR] Impossível clicar no tomador na cascata: {e_fallback}. Seguindo preenchimento...")
                 
                 time.sleep(2) # Aguarda o painel inferior de valores carregar
 
