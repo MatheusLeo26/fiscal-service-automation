@@ -274,9 +274,15 @@ def emit_nfse_batch():
             try:
                 # Check if we are already on the emission page (via URL or header)
                 if "/emitir-nfse" not in page.url:
-                    print("[INFO] Navegando para o menu de emissão...")
-                    page.locator("text=Serviços Prestados").click()
-                    page.locator("text=Emitir NFS-e").click()
+                    print("[INFO] Navegando para o menu de emissão (Início do loop)...")
+                    # Use robust selector to avoid strict mode violations
+                    target_sidebar = page.get_by_text("Serviços Prestados", exact=False).first
+                    target_sidebar.scroll_into_view_if_needed()
+                    target_sidebar.click()
+                    
+                    emitir_card = page.get_by_text("Emitir NFS-e", exact=True).first
+                    emitir_card.scroll_into_view_if_needed()
+                    emitir_card.click()
                     page.wait_for_load_state("networkidle")
                 else:
                     print("[INFO] Já está na página de emissão. Prosseguindo...")
@@ -324,17 +330,34 @@ def emit_nfse_batch():
 
                 # Passo 3: Dados do Tomador de Serviço
                 print(f"[INFO] Passo 3: Pesquisando Tomador: {cnpj}...")
-                selector_busca_tomador = "input#buscarTomador, input[name='cnpjTomador'], input[placeholder*='Pesquisar']"
+                selector_busca_tomador = "input#buscarTomador, input[name='cnpjTomador'], input[placeholder*='Pesquisar'], input[placeholder*='Tomador']"
                 page.wait_for_selector(selector_busca_tomador, timeout=10000)
-                page.fill(selector_busca_tomador, cnpj)
-                page.click("button:has-text('Pesquisar')")
-                time.sleep(3)
+                page.locator(selector_busca_tomador).scroll_into_view_if_needed()
+                page.fill(selector_busca_tomador, "") # Clear first
+                page.type(selector_busca_tomador, cnpj, delay=100) # Type slowly to trigger autocomplete
+                time.sleep(2) # Give Angular time to fetch
                 
-                # Clicar no nome do tomador na lista de resultados
-                selector_tomador_link = f"xpath=//*[contains(text(), '{nome_empresa}') or contains(text(), '{cnpj.strip()}')]"
-                page.wait_for_selector(selector_tomador_link, timeout=15000)
-                page.locator(selector_tomador_link).first.click()
-                print("[INFO] Tomador selecionado.")
+                # Clicar no nome do tomador na lista de resultados (Autocomplete dropdown)
+                print("[INFO] Aguardando lista de sugestões do Tomador...")
+                try:
+                    # Look for the angucomplete dropdown element containing the CNPJ or Name
+                    selector_tomador_sugestao = f".angucomplete-row:has-text('{cnpj.strip()}'), .angucomplete-row:has-text('{nome_empresa}')"
+                    page.wait_for_selector(selector_tomador_sugestao, timeout=10000)
+                    page.locator(selector_tomador_sugestao).first.scroll_into_view_if_needed()
+                    page.locator(selector_tomador_sugestao).first.click()
+                    print("[INFO] Tomador selecionado na lista suspensa.")
+                except Exception as e_tomador:
+                    print(f"[WARN] Lista de sugestão específica não encontrada. Tentando primeira opção ou fallback... Detalhe: {e_tomador}")
+                    # Fallback: Just click the first autocomplete row that appears
+                    try:
+                        page.wait_for_selector(".angucomplete-row", timeout=5000)
+                        page.locator(".angucomplete-row").first.click()
+                        print("[INFO] Primeira sugestão de Tomador selecionada via fallback.")
+                    except:
+                        print("[WARN] Nenhuma lista suspensa de Tomador apareceu. Tentando botão Pesquisar genérico...")
+                        page.click("button:has-text('Pesquisar')")
+                
+                time.sleep(2) # Wait for page to process the selection and reveal lower fields
 
                 # Passo 4: Valor do Serviço
                 print(f"[INFO] Passo 4: Preenchendo Valor (R$ {valor})...")
@@ -472,18 +495,31 @@ def emit_nfse_batch():
                     page.wait_for_load_state("networkidle")
 
             except Exception as e_inner:
-                print(f"[ERROR] Erro fatal no lote para {nome_empresa}: {str(e_inner)}")
+                print(f"[ERROR] Erro no cliente {nome_empresa}: {str(e_inner)}")
+                if SALVAR_EVIDENCIA_ERRO:
+                    try:
+                        if not page.is_closed():
+                            page.screenshot(path=os.path.join(evidence_dir, f"erro_{cnpj}.png"))
+                    except:
+                        pass
+                
+                print("[INFO] Robô 'respirando'... Aguardando 10 segundos antes de tentar recuperar e ir para o próximo.")
+                time.sleep(10)
+                
+                # Recovery - Attempt to return to the safe panel and continue to next client
                 try:
                     if not page.is_closed():
-                        page.screenshot(path=os.path.join(evidence_dir, f"erro_{cnpj}.png"))
-                except:
-                    pass
-                # Recovery
-                try:
-                    if not page.is_closed():
+                        print("[INFO] Tentando recarregar o painel principal...")
                         page.goto("https://itu.giss.com.br/portal/home#/operacao/servicos-prestados/emitir-nfse")
-                except:
+                        page.wait_for_load_state("networkidle")
+                        time.sleep(3)
+                        print(f"[WARN] Navegação de recuperação concluída. Pulando {nome_empresa}.")
+                except Exception as eval_err:
+                    print(f"[CRITICAL] O navegador travou ou a sessão caiu feio: {eval_err}. Interrompendo o lote.")
                     break 
+                
+                # Important: Continue to next row instead of breaking the loop
+                continue
 
         # 7. Final Report
         print("\n" + "="*60)
@@ -506,10 +542,13 @@ def emit_nfse_batch():
                     f.write(f"{nota['empresa'][:40]:<40} | {nota['valor']:<10} | {nota['numero']:<10}\n")
             print(f"\n[INFO] Relatório salvo em: {relatorio_file}")
             
-            # 8. Cleanup Progress if successful
+            # 8. Cleanup Progress if ALL pending clients were successful
             try:
-                if os.path.exists(checkpoint_path):
+                if os.path.exists(checkpoint_path) and len(relatorio_notas) == len(df_execucao):
+                    print("[INFO] Todos os clientes pendentes foram processados com sucesso. Limpando memória (progresso.json).")
                     os.remove(checkpoint_path)
+                elif os.path.exists(checkpoint_path):
+                    print(f"[INFO] Alguns clientes falharam. A memória foi mantida para a próxima tentativa ({len(relatorio_notas)} emitidos).")
             except: pass
         else:
             print("[INFO] Nenhuma nota foi emitida com sucesso nesta sessão.")
