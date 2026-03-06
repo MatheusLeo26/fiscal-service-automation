@@ -446,21 +446,26 @@ def emit_nfse_batch():
                 # NAVIGATION SEQUENCE FROM IMAGES
                 try:
                     # 1. Click "Serviços Prestados" in left sidebar
-                    sidebar_selector = "text=Serviços Prestados, .menu-item:has-text('Serviços Prestados')"
+                    # Based on image: Orange text, likely inside a sidebar container
+                    sidebar_selector = "xpath=//div[contains(@class, 'sidebar')]//span[contains(text(), 'Serviços Prestados')] | xpath=//*[contains(@class, 'menu-item') and contains(., 'Serviços Prestados')]"
                     print("[INFO] Clicando em 'Serviços Prestados' no menu lateral...")
-                    page.locator(sidebar_selector).scroll_into_view_if_needed()
-                    page.click(sidebar_selector)
+                    
+                    # Try a simpler text-based locator first if xpath is too complex
+                    target_sidebar = page.get_by_text("Serviços Prestados", exact=False).first
+                    target_sidebar.scroll_into_view_if_needed()
+                    target_sidebar.click()
                     time.sleep(1)
                     
                     # 2. Click "Emitir NFS-e" card/link
-                    emitir_selector = "text=Emitir NFS-e, .card-body:has-text('Emitir NFS-e')"
+                    # Based on image: A card with text "Emitir NFS-e"
                     print("[INFO] Clicando em 'Emitir NFS-e' para iniciar novo formulário...")
-                    page.locator(emitir_selector).scroll_into_view_if_needed()
-                    page.click(emitir_selector)
+                    emitir_card = page.get_by_text("Emitir NFS-e", exact=True).first
+                    emitir_card.scroll_into_view_if_needed()
+                    emitir_card.click()
                     
                     page.wait_for_load_state("networkidle")
-                    print("[INFO] Próximo cliente em 3 segundos...")
-                    time.sleep(3)
+                    print("[INFO] Painel de emissão carregado. Próximo cliente em breve...")
+                    time.sleep(2)
                 except Exception as e_nav:
                     print(f"[WARN] Falha na navegação pelo menu: {str(e_nav)}. Tentando recarregar rota...")
                     page.goto("https://itu.giss.com.br/portal/home#/operacao/servicos-prestados/emitir-nfse")
