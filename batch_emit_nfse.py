@@ -297,11 +297,26 @@ def emit_nfse_batch():
                     selector_atividade = "select#atividadeServico, select[name='atividadeServico'], select[name='atividade']"
                     page.wait_for_selector(f"{selector_atividade} option", timeout=20000)
                     
-                    # Try to select by label precisely
-                    page.select_option(selector_atividade, label="17.19 / 692060100 - ATIVIDADES DE CONTABILIDADE")
+                try:
+                    # Busca dinâmica pela atividade correta para evitar selecionar índice errado
+                    opcoes = page.locator(f"{selector_atividade} option")
+                    count = opcoes.count()
+                    selecionado = False
+                    
+                    for i in range(count):
+                        texto = opcoes.nth(i).inner_text()
+                        if "17.19" in texto or "CONTABILIDADE" in texto:
+                            valor = opcoes.nth(i).get_attribute("value")
+                            page.select_option(selector_atividade, value=valor)
+                            selecionado = True
+                            print(f"[INFO] Atividade selecionada dinamicamente: {texto.strip()}")
+                            break
+                    
+                    if not selecionado:
+                        print("[WARN] Não achou '17.19' dinamicamente. Tentando label exato original...")
+                        page.select_option(selector_atividade, label="17.19 / 692060100 - ATIVIDADES DE CONTABILIDADE")
                 except Exception as e_step1:
-                    print(f"[WARN] Falha na seleção por label: {str(e_step1)}. Tentando por índice...")
-                    page.select_option("select#atividadeServico", index=3) # Fallback
+                    print(f"[ERROR] Falha na seleção da Atividade: {str(e_step1)}. Isso pode quebrar os próximos passos.")
 
                 # Passo 2: NBS (Só após passo 1)
                 print("[INFO] Passo 2: Selecionando NBS (Apenas clique)...")
