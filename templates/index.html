@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emissão Automática NFS-e - GUIA Sistemas</title>
+    <!-- Use a modern, clean Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Clean modern color palette based on standard blue and white */
+            --primary: #0056b3; /* Deep Blue from logo vibe */
+            --primary-light: #4dabf7; /* Lighter Cyan/Blue */
+            --background: #f4f7f6; /* Very light cool grey/white */
+            --surface: #ffffff; /* Pure white */
+            --text-main: #2b3a4a;
+            --text-muted: #6c757d;
+            --success: #20c997;
+            --error: #fa5252;
+            --shadow: rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at 10% 20%, rgba(77, 171, 247, 0.05) 0%, transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(0, 86, 179, 0.05) 0%, transparent 40%);
+        }
+
+        .container {
+            background: var(--surface);
+            padding: 3rem 4rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px var(--shadow), 0 1px 3px rgba(0,0,0,0.05);
+            text-align: center;
+            width: 100%;
+            max-width: 450px;
+            position: relative;
+            overflow: hidden;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo {
+            max-width: 220px;
+            margin-bottom: 2rem;
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 2.5rem;
+            line-height: 1.4;
+        }
+
+        .input-group {
+            text-align: left;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-wrapper span {
+            position: absolute;
+            left: 1rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 1.1rem;
+            pointer-events: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 1rem 1rem 1rem 2.5rem;
+            font-size: 1.1rem;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            background-color: #f8f9fa;
+            color: var(--primary);
+            font-weight: 600;
+            box-sizing: border-box;
+            transition: var(--transition);
+            outline: none;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary-light);
+            background-color: var(--surface);
+            box-shadow: 0 0 0 4px rgba(77, 171, 247, 0.15);
+        }
+
+        .btn-start {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, var(--primary), #003d82);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 15px rgba(0, 86, 179, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 86, 179, 0.4);
+            background: linear-gradient(135deg, #004d9c, #002e63);
+        }
+
+        .btn-start:active {
+            transform: translateY(1px);
+        }
+
+        .btn-start:disabled {
+            background: #ced4da;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading Spinner inside Button */
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-panel {
+            margin-top: 2rem;
+            padding: 1rem;
+            border-radius: 10px;
+            background: #f8f9fa;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            border-left: 4px solid transparent;
+            transition: var(--transition);
+            display: none; /* Hidden until started */
+            text-align: left;
+            line-height: 1.5;
+        }
+        
+        .status-panel.active {
+            display: block;
+            animation: slideUp 0.4s ease;
+        }
+
+        .status-panel.running {
+            border-left-color: var(--primary-light);
+            background: rgba(77, 171, 247, 0.05);
+            color: var(--primary);
+        }
+
+        .status-panel.success {
+            border-left-color: var(--success);
+            background: rgba(32, 201, 151, 0.05);
+            color: #0ca678;
+        }
+        
+        .status-panel.error {
+            border-left-color: var(--error);
+            background: rgba(250, 82, 82, 0.05);
+            color: #e03131;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: currentColor;
+        }
+
+        .running-pulse {
+            animation: blink 1s infinite alternate;
+        }
+        
+        @keyframes blink {
+            from { opacity: 0.4; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Logo Image (Placed by the user in static folder) -->
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="GUIA Sistemas Logo" class="logo" onerror="this.src='https://via.placeholder.com/220x80/0056b3/ffffff?text=GUIA+Sistemas'">
+        
+        <h1>Automação ITUGISS</h1>
+        <p class="subtitle">Emissão em lote de Notas Fiscais de Serviço (NFS-e).</p>
+
+        <div class="input-group">
+            <label for="aliquota">Alíquota MENSAL DE ISS</label>
+            <div class="input-wrapper">
+                <span>%</span>
+                <input type="text" id="aliquota" placeholder="Ex: 2.24 ou 2,24" value="2.24" autocomplete="off">
+            </div>
+        </div>
+
+        <button id="btn-iniciar" class="btn-start" onclick="iniciarAutomacao()">
+            <span class="btn-text">Iniciar Processamento</span>
+            <div class="spinner" id="spinner"></div>
+        </button>
+
+        <div id="status-panel" class="status-panel">
+            <span class="status-indicator"></span>
+            <span id="status-text">Conectando...</span>
+        </div>
+    </div>
+
+    <script>
+        let pollInterval;
+
+        function inicarPolling() {
+            // Check status every 2 seconds
+            pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/status');
+                    const data = await res.json();
+                    
+                    const panel = document.getElementById('status-panel');
+                    const text = document.getElementById('status-text');
+                    const btn = document.getElementById('btn-iniciar');
+                    const spinner = document.getElementById('spinner');
+                    const btnText = document.querySelector('.btn-text');
+                    
+                    text.innerText = data.message;
+                    panel.classList.add('active');
+                    
+                    if (data.is_running) {
+                        panel.className = 'status-panel active running';
+                        document.querySelector('.status-indicator').classList.add('running-pulse');
+                        btn.disabled = true;
+                        spinner.style.display = 'block';
+                        btnText.innerText = 'Processando...';
+                    } else {
+                        // Stopped running
+                        document.querySelector('.status-indicator').classList.remove('running-pulse');
+                        btn.disabled = false;
+                        spinner.style.display = 'none';
+                        btnText.innerText = 'Iniciar Processamento';
+                        clearInterval(pollInterval);
+                        
+                        if (data.error) {
+                            panel.className = 'status-panel active error';
+                        } else if (data.message.includes("sucesso")) {
+                            panel.className = 'status-panel active success';
+                        }
+                    }
+                } catch (e) {
+                    console.error("Poling error", e);
+                }
+            }, 2000);
+        }
+
+        async function iniciarAutomacao() {
+            const aliquota = document.getElementById('aliquota').value;
+            
+            if(!aliquota) {
+                alert("Por favor, informe a alíquota.");
+                return;
+            }
+
+            // Immediately set UI state
+            const btn = document.getElementById('btn-iniciar');
+            const spinner = document.getElementById('spinner');
+            const panel = document.getElementById('status-panel');
+            const text = document.getElementById('status-text');
+            const btnText = document.querySelector('.btn-text');
+
+            btn.disabled = true;
+            spinner.style.display = 'block';
+            btnText.innerText = 'Iniciando Robô...';
+            panel.className = 'status-panel active running';
+            text.innerText = 'Lendo planilha e verificando ambiente...';
+            document.querySelector('.status-indicator').classList.add('running-pulse');
+
+            try {
+                const response = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ aliquota: aliquota })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    inicarPolling();
+                } else {
+                    alert(data.message);
+                    btn.disabled = false;
+                    spinner.style.display = 'none';
+                    btnText.innerText = 'Iniciar Processamento';
+                }
+            } catch (error) {
+                alert("Erro ao conectar com o robô.");
+                btn.disabled = false;
+                spinner.style.display = 'none';
+                btnText.innerText = 'Iniciar Processamento';
+            }
+        }
+    </script>
+</body>
+</html>
