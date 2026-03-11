@@ -351,33 +351,46 @@ def emit_nfse_batch():
                 print(f"[INFO] Passo 3: Pesquisando Tomador: {cnpj}...")
                 selector_busca_tomador = "input#buscarTomador, input[name='cnpjTomador'], input[placeholder*='Pesquisar'], input[placeholder*='Tomador']"
                 page.wait_for_selector(selector_busca_tomador, timeout=10000)
-                page.locator(selector_busca_tomador).scroll_into_view_if_needed()
+                
+                # PASSO 1: CLICAR NO CAMPO DE DIGITAÇÃO E DIGITAR O CNPJ DO CLIENTE
+                page.locator(selector_busca_tomador).click()
                 page.fill(selector_busca_tomador, cnpj)
                 
+                # PASSO 2: CLICAR NO BOTÃO PESQUISAR LOGO AO LADO
                 print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
                 btn_pesquisar = page.locator("button:has-text('Pesquisar')").first
-                btn_pesquisar.scroll_into_view_if_needed() # Centraliza o botão
                 btn_pesquisar.click()
-                time.sleep(3) # Aguarda retorno da pesquisa
+                time.sleep(3) # Aguarda retorno da pesquisa (cascata Angular)
                 
-                print("[INFO] Buscando nome da empresa na lista de resultados...")
-                # Pegar o primeiro nome para pesquisa genérica em caso de nomes muito longos ou diferentes
-                nome_curto = nome_empresa.split()[0] if nome_empresa else cnpj.strip()
-                
-                # Procura frouxa pelo nome, pelo CNPJ ou pelo primeiro nome
-                selector_tomador_link = f"xpath=//*[contains(text(), '{cnpj.strip()}')] | xpath=//a[contains(text(), '{nome_curto}')] | xpath=//*[contains(text(), '{nome_curto}')]"
+                # PASSO 3: DESCER A TELA PARA VER A OPÇÃO E DAR O CLIQUE OBRIGATÓRIO
+                print("[INFO] Rolando a tela para visualizar a lista suspensa...")
+                page.mouse.wheel(0, 300) # Rola fisicamente a tela para baixo para revelar a cascata
+                time.sleep(1)
                 
                 try:
-                    page.wait_for_selector(selector_tomador_link, timeout=15000)
-                    link_resultado = page.locator(selector_tomador_link).first
-                    link_resultado.scroll_into_view_if_needed() # Centraliza a linha de resultado
-                    link_resultado.click()
-                    print("[INFO] Tomador selecionado com sucesso.")
+                    # Estratégia principal: Localizar pelo nome exato da empresa ou parte dele
+                    # Utilizando get_by_text para não depender de XPath ou aspas complexas
+                    resultado_nome = page.get_by_text(nome_empresa, exact=False).first
+                    resultado_nome.wait_for(state="visible", timeout=10000)
+                    resultado_nome.click()
+                    print("[INFO] Tomador selecionado com sucesso pelo nome da empresa.")
                 except Exception as e_tomador:
-                    print(f"[WARN] Falha na seleção primária: {str(e_tomador)}. Tentando fallback pelo texto exato do CNPJ...")
-                    fallback = page.get_by_text(cnpj.strip(), exact=False).first
-                    fallback.scroll_into_view_if_needed()
-                    fallback.click()
+                    print(f"[WARN] Empresa não encontrada pelo nome. Tentando pelo CNPJ formatado...")
+                    # Fallback estratégico: O site exibe o CNPJ com pontuação na cascata (Ex: 33.726.493/0001-09)
+                    # O código anterior tentava buscar sem a pontuação, o que falhava.
+                    cnpj_pad = cnpj.strip().zfill(14)
+                    cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
+                    
+                    try:
+                        page.mouse.wheel(0, 300) # Rola mais um pouco caso esteja escondido
+                        time.sleep(1)
+                        resultado_cnpj = page.get_by_text(cnpj_formatado, exact=False).first
+                        resultado_cnpj.wait_for(state="visible", timeout=10000)
+                        resultado_cnpj.click()
+                        print("[INFO] Tomador selecionado com sucesso pelo CNPJ formatado.")
+                    except:
+                        print(f"[ERROR] Não foi possível clicar no tomador na cascata de opções. Verifique o print de erro.")
+                        raise Exception("Falha definitiva ao selecionar Tomador.")
                 
                 time.sleep(2) # Aguarda o painel inferior de valores carregar
 
@@ -427,14 +440,17 @@ def emit_nfse_batch():
                 page.wait_for_selector(selector_aliq, timeout=10000)
                 page.locator(selector_aliq).scroll_into_view_if_needed()
                 
+                # O site brasileiro normalmente usa vírgula para decimais na máscara
+                aliquota_limpa = aliquota.replace(".", ",")
+                
                 # Critical: Clear field first (Ctrl+A + Backspace) as per site mask
                 page.click(selector_aliq)
                 page.keyboard.press("Control+A")
                 page.keyboard.press("Backspace")
+                time.sleep(0.5)
                 
-                # Fill clean value
-                aliquota_limpa = aliquota.replace(",", ".")
-                page.type(selector_aliq, aliquota_limpa)
+                # Fill clean value (usando type com delay simulando usuário para não bugar a máscara)
+                page.locator(selector_aliq).press_sequentially(aliquota_limpa, delay=150)
                 time.sleep(1)
                 print(f"[INFO] Alíquota '{aliquota_limpa}' inserida.")
 
