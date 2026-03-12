@@ -368,29 +368,51 @@ def emit_nfse_batch():
                 time.sleep(1)
                 
                 try:
-                    # Estratégia principal: Localizar pelo nome exato da empresa ou parte dele
-                    # Utilizando get_by_text para não depender de XPath ou aspas complexas
+                    # Estratégia principal: Localizar pelo nome vindo da planilha
                     resultado_nome = page.get_by_text(nome_empresa, exact=False).first
-                    resultado_nome.wait_for(state="visible", timeout=10000)
+                    resultado_nome.wait_for(state="visible", timeout=5000)
                     resultado_nome.click()
                     print("[INFO] Tomador selecionado com sucesso pelo nome da empresa.")
-                except Exception as e_tomador:
-                    print(f"[WARN] Empresa não encontrada pelo nome. Tentando pelo CNPJ formatado...")
-                    # Fallback estratégico: O site exibe o CNPJ com pontuação na cascata (Ex: 33.726.493/0001-09)
-                    # O código anterior tentava buscar sem a pontuação, o que falhava.
-                    cnpj_pad = cnpj.strip().zfill(14)
-                    cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
-                    
+                except Exception:
+                    # Estratégia de Palavras-Chave (Fuzzy): Se "EM" vs "DE" ou pequenas variações travarem, 
+                    # tentamos um "aperto de mão" pelas primeiras palavras do nome.
                     try:
-                        page.mouse.wheel(0, 300) # Rola mais um pouco caso esteja escondido
-                        time.sleep(1)
-                        resultado_cnpj = page.get_by_text(cnpj_formatado, exact=False).first
-                        resultado_cnpj.wait_for(state="visible", timeout=10000)
-                        resultado_cnpj.click()
-                        print("[INFO] Tomador selecionado com sucesso pelo CNPJ formatado.")
+                        # Pega as primeiras 3 palavras significativas (maiores que 2 letras)
+                        print(f"[INFO] Nome exato não bateu. Tentando busca por palavras-chave...")
+                        keywords = [p for p in nome_empresa.split() if len(p) > 3][:3]
+                        fuzzy_name = " ".join(keywords)
+                        if fuzzy_name:
+                            resultado_fuzzy = page.get_by_text(fuzzy_name, exact=False).first
+                            resultado_fuzzy.wait_for(state="visible", timeout=5000)
+                            resultado_fuzzy.click()
+                            print(f"[INFO] Tomador selecionado via palavras-chave: '{fuzzy_name}'")
+                        else:
+                            raise Exception("Sem palavras-chave válidas.")
                     except:
-                        print(f"[ERROR] Não foi possível clicar no tomador na cascata de opções. Verifique o print de erro.")
-                        raise Exception("Falha definitiva ao selecionar Tomador.")
+                        print(f"[WARN] Busca por nome falhou. Recorrendo ao CNPJ formatado...")
+                        # Fallback estratégico: O site exibe o CNPJ com pontuação na cascata (Ex: 33.726.493/0001-09)
+                        cnpj_pad = cnpj.strip().zfill(14)
+                        cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
+                        
+                        try:
+                            # Se houver duplicidade de CNPJ (como no caso da Igreja Batista), 
+                            # tentamos filtrar pelo locador que contenha parte do nome E o CNPJ
+                            opcoes = page.get_by_text(cnpj_formatado, exact=False)
+                            for i in range(opcoes.count()):
+                                opt = opcoes.nth(i)
+                                texto_opt = opt.inner_text().upper()
+                                # Se alguma palavra do nome da empresa estiver nesse bloco do CNPJ, é o vencedor
+                                if any(word.upper() in texto_opt for word in nome_empresa.split() if len(word) > 3):
+                                    opt.click()
+                                    print(f"[INFO] Tomador selecionado por CNPJ + validação de nome.")
+                                    break
+                            else:
+                                # Se nada bater, clica no primeiro mesmo como última tentativa
+                                opcoes.first.click()
+                                print(f"[WARN] Tomador selecionado apenas por CNPJ (primeira opção).")
+                        except:
+                            print(f"[ERROR] Não foi possível selecionar o tomador. Verifique o print de erro.")
+                            raise Exception("Falha definitiva ao selecionar Tomador.")
                 
                 time.sleep(2) # Aguarda o painel inferior de valores carregar
 
