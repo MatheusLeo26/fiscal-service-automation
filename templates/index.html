@@ -269,11 +269,11 @@
 
 <body>
 
-    <div class="container-wrapper" style="display: flex; flex-direction: column; align-items: center;">
-        <!-- Logo Image (Placed by the user in static folder) -->
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="GUIA Sistemas Logo" class="logo"
-            style="margin-bottom: 1.5rem;"
-            onerror="this.src='https://via.placeholder.com/220x80/0056b3/ffffff?text=GUIA+Sistemas'">
+    <div class="container-wrapper" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+        <!-- Logo Image with cache busting -->
+        <img src="{{ url_for('static', filename='logo.png') }}?v=1" alt="GUIA Sistemas Logo" class="logo"
+            style="display: block; width: 280px; height: auto; margin-bottom: 2rem; object-fit: contain;"
+            onerror="this.src='https://via.placeholder.com/280x100/0056b3/ffffff?text=GUIA+Sistemas'">
 
         <div class="container">
             <h1>Automação ITUGISS</h1>
