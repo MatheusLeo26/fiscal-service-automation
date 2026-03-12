@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,10 +10,14 @@
     <style>
         :root {
             /* Clean modern color palette based on standard blue and white */
-            --primary: #0056b3; /* Deep Blue from logo vibe */
-            --primary-light: #4dabf7; /* Lighter Cyan/Blue */
-            --background: #f4f7f6; /* Very light cool grey/white */
-            --surface: #ffffff; /* Pure white */
+            --primary: #0056b3;
+            /* Deep Blue from logo vibe */
+            --primary-light: #4dabf7;
+            /* Lighter Cyan/Blue */
+            --background: #f4f7f6;
+            /* Very light cool grey/white */
+            --surface: #ffffff;
+            /* Pure white */
             --text-main: #2b3a4a;
             --text-muted: #6c757d;
             --success: #20c997;
@@ -31,14 +36,14 @@
             align-items: center;
             min-height: 100vh;
             background-image: radial-gradient(circle at 10% 20%, rgba(77, 171, 247, 0.05) 0%, transparent 40%),
-                              radial-gradient(circle at 90% 80%, rgba(0, 86, 179, 0.05) 0%, transparent 40%);
+                radial-gradient(circle at 90% 80%, rgba(0, 86, 179, 0.05) 0%, transparent 40%);
         }
 
         .container {
             background: var(--surface);
             padding: 3rem 4rem;
             border-radius: 20px;
-            box-shadow: 0 10px 40px var(--shadow), 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 10px 40px var(--shadow), 0 1px 3px rgba(0, 0, 0, 0.05);
             text-align: center;
             width: 100%;
             max-width: 450px;
@@ -48,8 +53,15 @@
         }
 
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .logo {
@@ -59,9 +71,17 @@
         }
 
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.02);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
 
         h1 {
@@ -171,14 +191,16 @@
             display: none;
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             border-top-color: white;
             animation: spin 1s ease-in-out infinite;
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .status-panel {
@@ -191,11 +213,12 @@
             color: var(--text-muted);
             border-left: 4px solid transparent;
             transition: var(--transition);
-            display: none; /* Hidden until started */
+            display: none;
+            /* Hidden until started */
             text-align: left;
             line-height: 1.5;
         }
-        
+
         .status-panel.active {
             display: block;
             animation: slideUp 0.4s ease;
@@ -212,7 +235,7 @@
             background: rgba(32, 201, 151, 0.05);
             color: #0ca678;
         }
-        
+
         .status-panel.error {
             border-left-color: var(--error);
             background: rgba(250, 82, 82, 0.05);
@@ -231,38 +254,48 @@
         .running-pulse {
             animation: blink 1s infinite alternate;
         }
-        
+
         @keyframes blink {
-            from { opacity: 0.4; }
-            to { opacity: 1; }
+            from {
+                opacity: 0.4;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
     </style>
 </head>
+
 <body>
 
-    <div class="container">
+    <div class="container-wrapper" style="display: flex; flex-direction: column; align-items: center;">
         <!-- Logo Image (Placed by the user in static folder) -->
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="GUIA Sistemas Logo" class="logo" onerror="this.src='https://via.placeholder.com/220x80/0056b3/ffffff?text=GUIA+Sistemas'">
-        
-        <h1>Automação ITUGISS</h1>
-        <p class="subtitle">Emissão em lote de Notas Fiscais de Serviço (NFS-e).</p>
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="GUIA Sistemas Logo" class="logo"
+            style="margin-bottom: 1.5rem;"
+            onerror="this.src='https://via.placeholder.com/220x80/0056b3/ffffff?text=GUIA+Sistemas'">
 
-        <div class="input-group">
-            <label for="aliquota">Alíquota MENSAL DE ISS</label>
-            <div class="input-wrapper">
-                <span>%</span>
-                <input type="text" id="aliquota" placeholder="Ex: 2.24 ou 2,24" value="2.24" autocomplete="off">
+        <div class="container">
+            <h1>Automação ITUGISS</h1>
+            <p class="subtitle">Emissão em lote de Notas Fiscais de Serviço (NFS-e).</p>
+
+            <div class="input-group">
+                <label for="aliquota">Alíquota MENSAL DE ISS</label>
+                <div class="input-wrapper">
+                    <span>%</span>
+                    <input type="text" id="aliquota" placeholder="Ex: 2.24 ou 2,24" value="2.24" autocomplete="off">
+                </div>
             </div>
-        </div>
 
-        <button id="btn-iniciar" class="btn-start" onclick="iniciarAutomacao()">
-            <span class="btn-text">Iniciar Processamento</span>
-            <div class="spinner" id="spinner"></div>
-        </button>
+            <button id="btn-iniciar" class="btn-start" onclick="iniciarAutomacao()">
+                <span class="btn-text">Iniciar Processamento</span>
+                <div class="spinner" id="spinner"></div>
+            </button>
 
-        <div id="status-panel" class="status-panel">
-            <span class="status-indicator"></span>
-            <span id="status-text">Conectando...</span>
+            <div id="status-panel" class="status-panel">
+                <span class="status-indicator"></span>
+                <span id="status-text">Conectando...</span>
+            </div>
         </div>
     </div>
 
@@ -275,16 +308,16 @@
                 try {
                     const res = await fetch('/api/status');
                     const data = await res.json();
-                    
+
                     const panel = document.getElementById('status-panel');
                     const text = document.getElementById('status-text');
                     const btn = document.getElementById('btn-iniciar');
                     const spinner = document.getElementById('spinner');
                     const btnText = document.querySelector('.btn-text');
-                    
+
                     text.innerText = data.message;
                     panel.classList.add('active');
-                    
+
                     if (data.is_running) {
                         panel.className = 'status-panel active running';
                         document.querySelector('.status-indicator').classList.add('running-pulse');
@@ -298,7 +331,7 @@
                         spinner.style.display = 'none';
                         btnText.innerText = 'Iniciar Processamento';
                         clearInterval(pollInterval);
-                        
+
                         if (data.error) {
                             panel.className = 'status-panel active error';
                         } else if (data.message.includes("sucesso")) {
@@ -313,8 +346,8 @@
 
         async function iniciarAutomacao() {
             const aliquota = document.getElementById('aliquota').value;
-            
-            if(!aliquota) {
+
+            if (!aliquota) {
                 alert("Por favor, informe a alíquota.");
                 return;
             }
@@ -339,9 +372,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ aliquota: aliquota })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     inicarPolling();
                 } else {
@@ -359,4 +392,5 @@
         }
     </script>
 </body>
+
 </html>
