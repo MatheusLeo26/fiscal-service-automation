@@ -275,22 +275,51 @@
             style="display: block; width: 280px; height: auto; margin-bottom: 2rem; object-fit: contain;"
             onerror="this.src='https://via.placeholder.com/280x100/0056b3/ffffff?text=GUIA+Sistemas'">
 
-        <div class="container">
+        <div class="container" id="main-container">
             <h1>Automação ITUGISS</h1>
             <p class="subtitle">Emissão em lote de Notas Fiscais de Serviço (NFS-e).</p>
 
-            <div class="input-group">
-                <label for="aliquota">Alíquota MENSAL DE ISS</label>
-                <div class="input-wrapper">
-                    <span>%</span>
-                    <input type="text" id="aliquota" placeholder="Ex: 2.24 ou 2,24" value="2.24" autocomplete="off">
+            <!-- Step 1: Alíquota Configuration -->
+            <div id="step-config">
+                <div class="input-group">
+                    <label for="aliquota">Alíquota MENSAL DE ISS</label>
+                    <div class="input-wrapper">
+                        <span>%</span>
+                        <input type="text" id="aliquota" placeholder="Ex: 2.24 ou 2,24" value="2.24" autocomplete="off">
+                    </div>
                 </div>
+
+                <button id="btn-carregar" class="btn-start" onclick="carregarDados()">
+                    <span class="btn-text">Analisar Planilha</span>
+                    <div class="spinner" id="spinner-load"></div>
+                </button>
             </div>
 
-            <button id="btn-iniciar" class="btn-start" onclick="iniciarAutomacao()">
-                <span class="btn-text">Iniciar Processamento</span>
-                <div class="spinner" id="spinner"></div>
-            </button>
+            <!-- Step 2: Review Table (Hidden by default) -->
+            <div id="step-review" style="display: none; margin-top: 2rem; width: 100%;">
+                <h2 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 1rem; text-align: left;">📋 REVISÃO
+                    DE EMISSÕES</h2>
+                <div class="table-scroll">
+                    <table id="client-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">Pular</th>
+                                <th>Empresa</th>
+                                <th style="width: 100px;">Valor (R$)</th>
+                                <th>Discriminação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="client-body">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <button id="btn-iniciar" class="btn-start" style="margin-top: 1.5rem;" onclick="iniciarAutomacao()">
+                    <span class="btn-text">Confirmar e Iniciar Robô</span>
+                    <div class="spinner" id="spinner"></div>
+                </button>
+            </div>
 
             <div id="status-panel" class="status-panel">
                 <span class="status-indicator"></span>
@@ -299,11 +328,229 @@
         </div>
     </div>
 
+    <!-- Additional Styles for the Review Panel -->
+    <style>
+        #main-container.expanded {
+            max-width: 900px;
+            transition: max-width 0.5s ease;
+        }
+
+        .table-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            font-weight: 700;
+            color: var(--primary);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 2px solid #eee;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #f1f3f5;
+        }
+
+        tr.skipped {
+            background-color: #f8f9fa;
+            opacity: 0.6;
+        }
+
+        .td-name {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .edit-input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            box-sizing: border-box;
+        }
+
+        .edit-input:focus {
+            border-color: var(--primary-light);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.1);
+        }
+
+        textarea.edit-input {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        /* Checkbox styling */
+        .skip-check {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+    </style>
+
     <script>
         let pollInterval;
+        let originalData = [];
+
+        async function carregarDados() {
+            const btnLoad = document.getElementById('btn-carregar');
+            const spinner = document.getElementById('spinner-load');
+            const btnText = btnLoad.querySelector('.btn-text');
+
+            btnLoad.disabled = true;
+            spinner.style.display = 'block';
+            btnText.innerText = 'Lendo Planilha...';
+
+            try {
+                const response = await fetch('/api/data');
+                const result = await response.json();
+
+                if (result.success) {
+                    originalData = result.data;
+                    renderTable(originalData);
+
+                    // Expand UI and show table
+                    document.getElementById('main-container').classList.add('expanded');
+                    document.getElementById('step-config').style.display = 'none';
+                    document.getElementById('step-review').style.display = 'block';
+                } else {
+                    alert("Erro ao carregar planilha: " + result.message);
+                }
+            } catch (e) {
+                alert("Erro de conexão ao carregar dados.");
+            } finally {
+                btnLoad.disabled = false;
+                spinner.style.display = 'none';
+                btnText.innerText = 'Analisar Planilha';
+            }
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('client-body');
+            tbody.innerHTML = '';
+
+            data.forEach((row, index) => {
+                // Find column names dynamically (same logic as robot)
+                const colEmpresa = Object.keys(row).find(k => k.toLowerCase().includes('empresa') || k.toLowerCase().includes('razao'));
+                const colDesc = Object.keys(row).find(k => k.toLowerCase().includes('discrimina'));
+                const colValor = 'VALOR';
+
+                const tr = document.createElement('tr');
+                tr.id = `row-${index}`;
+
+                tr.innerHTML = `
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="skip-check" onchange="toggleSkip(${index})">
+                    </td>
+                    <td class="td-name">
+                        ${row[colEmpresa]}<br>
+                        <small style="color: grey; font-weight: normal;">${row['CNPJ'] || ''}</small>
+                    </td>
+                    <td>
+                        <input type="text" class="edit-input val-input" value="${row[colValor]}" data-index="${index}">
+                    </td>
+                    <td>
+                        <textarea class="edit-input desc-input" data-index="${index}">${row[colDesc]}</textarea>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function toggleSkip(index) {
+            const row = document.getElementById(`row-${index}`);
+            row.classList.toggle('skipped');
+        }
+
+        async function iniciarAutomacao() {
+            const aliquota = document.getElementById('aliquota').value;
+
+            // Collect edited data
+            const rows = document.querySelectorAll('#client-body tr');
+            const finalClients = [];
+
+            rows.forEach(tr => {
+                const index = tr.id.split('-')[1];
+                const isSkipped = tr.querySelector('.skip-check').checked;
+
+                if (!isSkipped) {
+                    const client = { ...originalData[index] };
+
+                    // Dynamic column detection for keys
+                    const colDesc = Object.keys(client).find(k => k.toLowerCase().includes('discrimina'));
+
+                    // Update with UI values
+                    client['VALOR'] = tr.querySelector('.val-input').value;
+                    client[colDesc] = tr.querySelector('.desc-input').value;
+
+                    finalClients.push(client);
+                }
+            });
+
+            if (finalClients.length === 0) {
+                alert("Nenhum cliente selecionado para emissão.");
+                return;
+            }
+
+            // UI State change
+            const btn = document.getElementById('btn-iniciar');
+            const spinner = document.getElementById('spinner');
+            const panel = document.getElementById('status-panel');
+            const text = document.getElementById('status-text');
+            const btnText = btn.querySelector('.btn-text');
+
+            btn.disabled = true;
+            spinner.style.display = 'block';
+            btnText.innerText = 'Processando...';
+            panel.className = 'status-panel active running';
+            text.innerText = 'Iniciando o robô com seus dados revisados...';
+            document.querySelector('.status-indicator').classList.add('running-pulse');
+
+            try {
+                const response = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        aliquota: aliquota,
+                        clientes: finalClients
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    inicarPolling();
+                } else {
+                    alert(data.message);
+                    btn.disabled = false;
+                    spinner.style.display = 'none';
+                    btnText.innerText = 'Confirmar e Iniciar Robô';
+                }
+            } catch (error) {
+                alert("Erro ao conectar com o robô.");
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
 
         function inicarPolling() {
-            // Check status every 2 seconds
             pollInterval = setInterval(async () => {
                 try {
                     const res = await fetch('/api/status');
@@ -313,7 +560,7 @@
                     const text = document.getElementById('status-text');
                     const btn = document.getElementById('btn-iniciar');
                     const spinner = document.getElementById('spinner');
-                    const btnText = document.querySelector('.btn-text');
+                    const btnText = btn.querySelector('.btn-text');
 
                     text.innerText = data.message;
                     panel.classList.add('active');
@@ -325,11 +572,10 @@
                         spinner.style.display = 'block';
                         btnText.innerText = 'Processando...';
                     } else {
-                        // Stopped running
                         document.querySelector('.status-indicator').classList.remove('running-pulse');
                         btn.disabled = false;
                         spinner.style.display = 'none';
-                        btnText.innerText = 'Iniciar Processamento';
+                        btnText.innerText = 'Confirmar e Iniciar Robô';
                         clearInterval(pollInterval);
 
                         if (data.error) {
@@ -339,56 +585,9 @@
                         }
                     }
                 } catch (e) {
-                    console.error("Poling error", e);
+                    console.error("Polling error", e);
                 }
             }, 2000);
-        }
-
-        async function iniciarAutomacao() {
-            const aliquota = document.getElementById('aliquota').value;
-
-            if (!aliquota) {
-                alert("Por favor, informe a alíquota.");
-                return;
-            }
-
-            // Immediately set UI state
-            const btn = document.getElementById('btn-iniciar');
-            const spinner = document.getElementById('spinner');
-            const panel = document.getElementById('status-panel');
-            const text = document.getElementById('status-text');
-            const btnText = document.querySelector('.btn-text');
-
-            btn.disabled = true;
-            spinner.style.display = 'block';
-            btnText.innerText = 'Iniciando Robô...';
-            panel.className = 'status-panel active running';
-            text.innerText = 'Lendo planilha e verificando ambiente...';
-            document.querySelector('.status-indicator').classList.add('running-pulse');
-
-            try {
-                const response = await fetch('/api/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ aliquota: aliquota })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    inicarPolling();
-                } else {
-                    alert(data.message);
-                    btn.disabled = false;
-                    spinner.style.display = 'none';
-                    btnText.innerText = 'Iniciar Processamento';
-                }
-            } catch (error) {
-                alert("Erro ao conectar com o robô.");
-                btn.disabled = false;
-                spinner.style.display = 'none';
-                btnText.innerText = 'Iniciar Processamento';
-            }
         }
     </script>
 </body>

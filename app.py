@@ -2,6 +2,8 @@ import sys
 import threading
 import time
 import webbrowser
+import pandas as pd
+from unittest.mock import patch
 from flask import Flask, render_template, request, jsonify
 
 # Add the current directory to the path so we can import the batch script
@@ -47,7 +49,9 @@ class MockInput:
         
         return ""
 
-def run_automation_thread(aliquota):
+        return ""
+
+def run_automation_thread(aliquota, df_customizado):
     """Runs the Playwright automation in a separate thread so it doesn't block Flask"""
     global automation_status
     automation_status["is_running"] = True
@@ -62,8 +66,13 @@ def run_automation_thread(aliquota):
         # Override the input() function globally for the thread duration
         builtins.input = MockInput(aliquota)
         
-        # Call the exact same function that START_AUTOMATION.bat calls
-        emit_nfse_batch()
+        # Intercepta a leitura do Excel do pandas para que o robô use os dados editados na UI
+        # Isso garante que não alteramos o arquivo batch_emit_nfse.py original.
+        with patch('pandas.read_excel') as mock_read:
+            mock_read.return_value = df_customizado
+            
+            # Call the exact same function that START_AUTOMATION.bat calls
+            emit_nfse_batch()
         
         automation_status["message"] = "Emissão finalizada com sucesso! Verifique a pasta 'evidencias'."
         
@@ -80,9 +89,20 @@ def run_automation_thread(aliquota):
 def index():
     return render_template('index.html')
 
-@app.route('/api/status', methods=['GET'])
-def get_status():
-    return jsonify(automation_status)
+@app.route('/api/data', methods=['GET'])
+def get_data():
+    """Reads the Excel file and returns it as JSON for the review panel"""
+    try:
+        excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clientes.xlsx")
+        if not os.path.exists(excel_path):
+            return jsonify({"success": False, "message": "Planilha 'clientes.xlsx' não encontrada."})
+            
+        df = pd.read_excel(excel_path)
+        # Convert to list of dicts for the frontend
+        data = df.to_dict(orient='records')
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 
 @app.route('/api/start', methods=['POST'])
 def start_automation():
@@ -93,9 +113,16 @@ def start_automation():
         
     data = request.json
     aliquota = data.get('aliquota', '2.24')
+    clientes_editados = data.get('clientes', [])
+    
+    if not clientes_editados:
+        return jsonify({"success": False, "message": "Nenhum cliente enviado para processamento."})
+        
+    # Converte os dados editados da UI de volta para um DataFrame do pandas
+    df_customizado = pd.DataFrame(clientes_editados)
     
     # Começa a thread em background para não travar o site
-    thread = threading.Thread(target=run_automation_thread, args=(aliquota,))
+    thread = threading.Thread(target=run_automation_thread, args=(aliquota, df_customizado))
     thread.daemon = True
     thread.start()
     
