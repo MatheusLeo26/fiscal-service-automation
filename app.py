@@ -18,9 +18,17 @@ app = Flask(__name__)
 # Global state to track automation status
 automation_status = {
     "is_running": False,
+    "is_paused": False,
     "message": "Aguardando início...",
     "error": None
 }
+
+# Threading event for pause/resume control
+pause_event = threading.Event()
+pause_event.set() # Set to "Running" by default
+
+# Store the active dataframe globally so it can be updated during pause
+active_df = None
 
 # Advanced Python mock to intercept the 'input()' calls inside the batch script
 # without needing to rewrite the existing file.
@@ -53,28 +61,54 @@ class MockInput:
 
 def run_automation_thread(aliquota, df_customizado):
     """Runs the Playwright automation in a separate thread so it doesn't block Flask"""
-    global automation_status
+    global automation_status, active_df
+    active_df = df_customizado
     automation_status["is_running"] = True
+    automation_status["is_paused"] = False
     automation_status["message"] = "Automação iniciada. Não feche o navegador!"
     automation_status["error"] = None
     
     # Keep original builtins
     import builtins
     original_input = builtins.input
+    original_print = builtins.print
     
+    # Smart Interceptor for Print: This is our "Pause Hook"
+    def mocked_print(*args, **kwargs):
+        # If we are paused, wait here before logging/stepping further
+        if not pause_event.is_set():
+            automation_status["is_paused"] = True
+            automation_status["message"] = "⏸️ ROBÔ PAUSADO. Aguardando sua retomada..."
+        
+        pause_event.wait() # Blocking call if event is cleared
+        
+        automation_status["is_paused"] = False
+        original_print(*args, **kwargs)
+
     try:
-        # Override the input() function globally for the thread duration
+        # Override functions globally for the thread duration
         builtins.input = MockInput(aliquota)
+        builtins.print = mocked_print
         
         # Intercepta a leitura do Excel do pandas para que o robô use os dados editados na UI
-        # Isso garante que não alteramos o arquivo batch_emit_nfse.py original.
         with patch('pandas.read_excel') as mock_read:
-            mock_read.return_value = df_customizado
+            mock_read.return_value = active_df
             
             # Call the exact same function that START_AUTOMATION.bat calls
             emit_nfse_batch()
         
-        automation_status["message"] = "Emissão finalizada com sucesso! Verifique a pasta 'evidencias'."
+        automation_status["message"] = "✅ Emissão finalizada com sucesso! Verifique a pasta 'evidencias'."
+        
+    except Exception as e:
+        automation_status["error"] = str(e)
+        automation_status["message"] = f"❌ Erro na execução: {str(e)}"
+    finally:
+        # Restore original builtins
+        builtins.input = original_input
+        builtins.print = original_print
+        automation_status["is_running"] = False
+        automation_status["is_paused"] = False
+        pause_event.set() # Ensure doesn't stay blocked
         
     except Exception as e:
         automation_status["error"] = str(e)
@@ -106,7 +140,7 @@ def get_data():
 
 @app.route('/api/start', methods=['POST'])
 def start_automation():
-    global automation_status
+    global automation_status, active_df
     
     if automation_status["is_running"]:
         return jsonify({"success": False, "message": "Automação já está rodando!"})
@@ -118,6 +152,9 @@ def start_automation():
     if not clientes_editados:
         return jsonify({"success": False, "message": "Nenhum cliente enviado para processamento."})
         
+    # Reset event to running state
+    pause_event.set()
+    
     # Converte os dados editados da UI de volta para um DataFrame do pandas
     df_customizado = pd.DataFrame(clientes_editados)
     
@@ -127,6 +164,34 @@ def start_automation():
     thread.start()
     
     return jsonify({"success": True, "message": "Processo iniciado!"})
+
+@app.route('/api/pause', methods=['POST'])
+def pause_automation():
+    global automation_status
+    if not automation_status["is_running"]:
+        return jsonify({"success": False, "message": "Automação não está rodando."})
+    
+    pause_event.clear() # Robot will block next time it calls print()
+    return jsonify({"success": True, "message": "Sinal de pausa enviado."})
+
+@app.route('/api/resume', methods=['POST'])
+def resume_automation():
+    global automation_status, active_df
+    if not automation_status["is_running"]:
+        return jsonify({"success": False, "message": "Automação não está rodando."})
+    
+    # Se o usuário enviou atualizações (adendos) durante a pausa
+    data = request.json
+    if data and "clientes" in data:
+        # Atualizamos o Dataframe ATIVO em tempo real
+        # O robô, ao continuar o loop, pegará os novos valores
+        new_df = pd.DataFrame(data["clientes"])
+        for col in new_df.columns:
+            active_df[col] = new_df[col]
+        print("[GUI-Update] Dados atualizados durante a pausa.")
+
+    pause_event.set() # Unblock robot
+    return jsonify({"success": True, "message": "Retomando execução..."})
 
 def open_browser():
     # Wait a tiny bit for the server to spin up

@@ -322,14 +322,52 @@
             </div>
 
             <div id="status-panel" class="status-panel">
-                <span class="status-indicator"></span>
-                <span id="status-text">Conectando...</span>
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <span class="status-indicator"></span>
+                        <span id="status-text">Conectando...</span>
+                    </div>
+                    <div id="control-buttons" style="display: none; gap: 10px;">
+                        <button id="btn-pause" class="btn-control pause" onclick="pausarAutomacao()">
+                            <span>Pausar</span>
+                        </button>
+                        <button id="btn-resume" class="btn-control resume" onclick="retomarAutomacao()"
+                            style="display: none;">
+                            <span>Retomar</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Additional Styles for the Review Panel -->
+    <!-- Additional Styles for the Review Panel & Controls -->
     <style>
+        .btn-control {
+            padding: 6px 15px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-control.pause {
+            background-color: #ffe066;
+            color: #868e96;
+        }
+
+        .btn-control.resume {
+            background-color: var(--success);
+            color: white;
+            box-shadow: 0 4px 10px rgba(32, 201, 151, 0.3);
+        }
+
+        .btn-control:hover {
+            transform: translateY(-2px);
+        }
+
         #main-container.expanded {
             max-width: 900px;
             transition: max-width 0.5s ease;
@@ -558,9 +596,12 @@
 
                     const panel = document.getElementById('status-panel');
                     const text = document.getElementById('status-text');
-                    const btn = document.getElementById('btn-iniciar');
+                    const btnIniciar = document.getElementById('btn-iniciar');
                     const spinner = document.getElementById('spinner');
-                    const btnText = btn.querySelector('.btn-text');
+                    const btnText = btnIniciar.querySelector('.btn-text');
+                    const controls = document.getElementById('control-buttons');
+                    const btnPause = document.getElementById('btn-pause');
+                    const btnResume = document.getElementById('btn-resume');
 
                     text.innerText = data.message;
                     panel.classList.add('active');
@@ -568,14 +609,28 @@
                     if (data.is_running) {
                         panel.className = 'status-panel active running';
                         document.querySelector('.status-indicator').classList.add('running-pulse');
-                        btn.disabled = true;
+                        btnIniciar.disabled = true;
                         spinner.style.display = 'block';
                         btnText.innerText = 'Processando...';
+                        controls.style.display = 'flex';
+
+                        if (data.is_paused) {
+                            panel.className = 'status-panel active error'; // Yellow/Orange alert style
+                            btnPause.style.display = 'none';
+                            btnResume.style.display = 'block';
+                            setInputsEnabled(true);
+                        } else {
+                            btnPause.style.display = 'block';
+                            btnResume.style.display = 'none';
+                            setInputsEnabled(false);
+                        }
                     } else {
                         document.querySelector('.status-indicator').classList.remove('running-pulse');
-                        btn.disabled = false;
+                        btnIniciar.disabled = false;
                         spinner.style.display = 'none';
                         btnText.innerText = 'Confirmar e Iniciar Robô';
+                        controls.style.display = 'none';
+                        setInputsEnabled(true);
                         clearInterval(pollInterval);
 
                         if (data.error) {
@@ -588,6 +643,49 @@
                     console.error("Polling error", e);
                 }
             }, 2000);
+        }
+
+        function setInputsEnabled(enabled) {
+            const inputs = document.querySelectorAll('.edit-input, .skip-check');
+            inputs.forEach(input => {
+                input.disabled = !enabled;
+            });
+        }
+
+        async function pausarAutomacao() {
+            try {
+                const res = await fetch('/api/pause', { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) alert(data.message);
+            } catch (e) {
+                alert("Erro ao enviar comando de pausa.");
+            }
+        }
+
+        async function retomarAutomacao() {
+            // Collect Current data (Adendos)
+            const rows = document.querySelectorAll('#client-body tr');
+            const currentData = [];
+            rows.forEach(tr => {
+                const index = tr.id.split('-')[1];
+                const client = { ...originalData[index] };
+                const colDesc = Object.keys(client).find(k => k.toLowerCase().includes('discrimina'));
+                client['VALOR'] = tr.querySelector('.val-input').value;
+                client[colDesc] = tr.querySelector('.desc-input').value;
+                currentData.push(client);
+            });
+
+            try {
+                const res = await fetch('/api/resume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientes: currentData })
+                });
+                const data = await res.json();
+                if (!data.success) alert(data.message);
+            } catch (e) {
+                alert("Erro ao enviar comando de retomada.");
+            }
         }
     </script>
 </body>
