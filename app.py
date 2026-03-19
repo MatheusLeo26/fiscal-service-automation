@@ -109,14 +109,6 @@ def run_automation_thread(aliquota, df_customizado):
         automation_status["is_running"] = False
         automation_status["is_paused"] = False
         pause_event.set() # Ensure doesn't stay blocked
-        
-    except Exception as e:
-        automation_status["error"] = str(e)
-        automation_status["message"] = f"Erro na execução: {str(e)}"
-    finally:
-        # Restore original builtins
-        builtins.input = original_input
-        automation_status["is_running"] = False
 
 
 @app.route('/')
