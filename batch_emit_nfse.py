@@ -13,7 +13,7 @@ load_dotenv()
 # Configurações de Execução
 SALVAR_EVIDENCIA_ERRO = True # Guardar fotos de erro para ajudar no suporte (Sugerido: True)
 
-def emit_nfse_batch():
+def emit_nfse_batch(headless=False):
     # 1. Setup paths and Load Excel early
     current_dir = os.path.dirname(os.path.abspath(__file__))
     excel_path = os.path.join(current_dir, "clientes.xlsx")
@@ -109,7 +109,7 @@ def emit_nfse_batch():
     print(f"\n[INFO] Pasta de evidências criada: {evidence_dir}")
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False) # Change to True later if preferred
+        browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
         page = context.new_page()
         

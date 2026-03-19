@@ -59,7 +59,7 @@ class MockInput:
 
         return ""
 
-def run_automation_thread(aliquota, df_customizado):
+def run_automation_thread(aliquota, df_customizado, headless=False):
     """Runs the Playwright automation in a separate thread so it doesn't block Flask"""
     global automation_status, active_df
     active_df = df_customizado
@@ -95,7 +95,7 @@ def run_automation_thread(aliquota, df_customizado):
             mock_read.return_value = active_df
             
             # Call the exact same function that START_AUTOMATION.bat calls
-            emit_nfse_batch()
+            emit_nfse_batch(headless=headless)
         
         automation_status["message"] = "✅ Emissão finalizada com sucesso! Verifique a pasta 'evidencias'."
         
@@ -140,6 +140,7 @@ def start_automation():
     data = request.json
     aliquota = data.get('aliquota', '2.24')
     clientes_editados = data.get('clientes', [])
+    headless = data.get('headless', False)
     
     if not clientes_editados:
         return jsonify({"success": False, "message": "Nenhum cliente enviado para processamento."})
@@ -151,7 +152,7 @@ def start_automation():
     df_customizado = pd.DataFrame(clientes_editados)
     
     # Começa a thread em background para não travar o site
-    thread = threading.Thread(target=run_automation_thread, args=(aliquota, df_customizado))
+    thread = threading.Thread(target=run_automation_thread, args=(aliquota, df_customizado, headless))
     thread.daemon = True
     thread.start()
     
