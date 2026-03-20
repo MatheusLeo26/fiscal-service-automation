@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 data = [
     ["42333077000123", "ARTIGOS ESPORTIVOS ITU LTDA", 420.00, "Serviços de Contabilidade e Departamento Pessoal"],
@@ -29,5 +30,7 @@ data = [
 ]
 
 df = pd.DataFrame(data, columns=["CNPJ", "Nome da empresa", "VALOR", "Discriminação dos Serviços"])
-df.to_excel("C:/Users/SrgRH/.gemini/antigravity/scratch/itugiss_automation/clientes.xlsx", index=False)
-print("Arquivo clientes.xlsx criado com sucesso!")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+excel_path = os.path.join(current_dir, "clientes.xlsx")
+df.to_excel(excel_path, index=False)
+print(f"Arquivo clientes.xlsx criado com sucesso em: {excel_path}")

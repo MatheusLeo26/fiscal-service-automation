@@ -189,7 +189,15 @@ def resume_automation():
 def open_browser():
     # Wait a tiny bit for the server to spin up
     time.sleep(1.5)
-    webbrowser.open_new("http://127.0.0.1:5000/")
+    url = "http://127.0.0.1:5000/"
+    # Forçar abertura em NOVA JANELA no Windows (Chrome/Edge/Default)
+    # O comando 'start' com --new-window é mais garantido que webbrowser.open_new
+    try:
+        # Tenta Chrome primeiro que é o padrão do robô
+        os.system(f'start chrome --new-window {url}')
+    except:
+        # Fallback para o comportamento padrão do sistema
+        webbrowser.open_new(url)
 
 if __name__ == '__main__':
     # Auto-open the UI when the user clicks the script
