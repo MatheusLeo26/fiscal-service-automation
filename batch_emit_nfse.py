@@ -297,9 +297,16 @@ def emit_nfse_batch(headless=False):
             cnpj = str(row['CNPJ']).strip()
             raw_valor = row['VALOR']
             if isinstance(raw_valor, (int, float)):
-                valor = f"{float(raw_valor):.2f}"
+                valor = f"{float(raw_valor):.2f}".replace('.', ',')
             else:
-                valor = str(raw_valor).replace('R$', '').replace('.', '').replace(',', '.').strip()
+                raw_str = str(raw_valor).replace('R$', '').strip()
+                if ',' in raw_str and '.' in raw_str:
+                    raw_str = raw_str.replace('.', '')
+                elif '.' in raw_str and len(raw_str.split('.')[-1]) <= 2:
+                    raw_str = raw_str.replace('.', ',')
+                if ',' not in raw_str:
+                    raw_str += ",00"
+                valor = raw_str
             
             nome_empresa = str(row[col_empresa]).strip()
             descricao = str(row[col_descricao]).strip()
@@ -462,7 +469,10 @@ def emit_nfse_batch(headless=False):
                 print(f"[INFO] Passo 4: Preenchendo Valor (R$ {valor})...")
                 selector_valor = "input#valorServico, input[name='valorServico']"
                 page.wait_for_selector(selector_valor, timeout=10000)
-                page.fill(selector_valor, valor)
+                # Formato final com vírgula para respeitar a máscara e uso sequencial
+                page.locator(selector_valor).click()
+                page.locator(selector_valor).press_sequentially(valor, delay=30)
+                page.locator(selector_valor).blur()
 
                 # Passo 5: Discriminação do Serviço
                 print("[INFO] Passo 5: Preenchendo Descrição...")
