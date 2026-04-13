@@ -342,8 +342,14 @@
                             style="display: none;">
                             <span>Retomar</span>
                         </button>
+                        <button id="btn-report" class="btn-control report" onclick="visualizarRelatorio()"
+                            style="display: none;">
+                            <span>📄 Visualizar Relatório</span>
+                        </button>
                     </div>
                 </div>
+                <!-- Box para o Relatório -->
+                <div id="report-view" style="display: none; margin-top: 15px; padding: 10px; background: white; border: 1px solid #ced4da; border-radius: 8px; font-family: monospace; font-size: 0.8rem; text-align: left; max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: #495057;"></div>
             </div>
         </div>
     </div>
@@ -369,6 +375,12 @@
             background-color: var(--success);
             color: white;
             box-shadow: 0 4px 10px rgba(32, 201, 151, 0.3);
+        }
+
+        .btn-control.report {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 10px rgba(0, 86, 179, 0.2);
         }
 
         .btn-control:hover {
@@ -635,17 +647,36 @@
                         }
                     } else {
                         document.querySelector('.status-indicator').classList.remove('running-pulse');
-                        btnIniciar.disabled = false;
                         spinner.style.display = 'none';
-                        btnText.innerText = 'Confirmar e Iniciar Robô';
                         controls.style.display = 'none';
-                        setInputsEnabled(true);
                         clearInterval(pollInterval);
 
                         if (data.error) {
                             panel.className = 'status-panel active error';
+                            btnIniciar.disabled = false;
+                            btnText.innerText = 'Tentar Novamente';
+                            setInputsEnabled(true);
                         } else if (data.message.includes("sucesso")) {
                             panel.className = 'status-panel active success';
+                            btnIniciar.disabled = true;
+                            
+                            // Change main button to success state completely
+                            btnIniciar.style.background = 'var(--success)';
+                            btnIniciar.style.boxShadow = 'none';
+                            btnText.innerText = 'Processamento Concluído com sucesso!';
+                            
+                            // Show Report Button
+                            controls.style.display = 'flex';
+                            document.getElementById('btn-pause').style.display = 'none';
+                            document.getElementById('btn-resume').style.display = 'none';
+                            document.getElementById('btn-report').style.display = 'block';
+                            
+                            setInputsEnabled(false);
+                        } else {
+                            // Default reset state
+                            btnIniciar.disabled = false;
+                            btnText.innerText = 'Confirmar e Iniciar Robô';
+                            setInputsEnabled(true);
                         }
                     }
                 } catch (e) {
@@ -695,6 +726,31 @@
             } catch (e) {
                 alert("Erro ao enviar comando de retomada.");
             }
+        }
+
+        async function visualizarRelatorio() {
+            const div = document.getElementById('report-view');
+            const btn = document.getElementById('btn-report');
+            
+            if (div.style.display === 'block') {
+                div.style.display = 'none';
+                return;
+            }
+
+            btn.querySelector('span').innerText = 'Carregando...';
+            try {
+                const res = await fetch('/api/report');
+                const data = await res.json();
+                if (data.success) {
+                    div.innerText = data.report;
+                    div.style.display = 'block';
+                } else {
+                    alert("Erro ao carregar relatório: " + data.message);
+                }
+            } catch (e) {
+                alert("Erro ao conectar com o servidor.");
+            }
+            btn.querySelector('span').innerText = '📄 Visualizar Relatório';
         }
     </script>
 </body>

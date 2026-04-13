@@ -5,6 +5,7 @@ import webbrowser
 import pandas as pd
 from unittest.mock import patch
 from flask import Flask, render_template, request, jsonify
+import glob
 
 # Add the current directory to the path so we can import the batch script
 import os
@@ -55,8 +56,9 @@ class MockInput:
         if "alterar valores" in prompt.lower():
             return "N"  # Padrão: Não fazemos substituições via terminal agora
         
-        return ""
-
+        if "enter" in prompt.lower() or "pressione" in prompt.lower():
+            return "" # Evita travar no final esperando Enter no terminal
+            
         return ""
 
 def run_automation_thread(aliquota, df_customizado, headless=False):
@@ -114,6 +116,33 @@ def run_automation_thread(aliquota, df_customizado, headless=False):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/api/status', methods=['GET'])
+def get_status():
+    global automation_status
+    return jsonify(automation_status)
+
+@app.route('/api/report', methods=['GET'])
+def get_report():
+    try:
+        # Pega a pasta evidencias e encontra a mais recente
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        evidencias_dir = os.path.join(current_dir, "evidencias", "execucao_*")
+        
+        pastas = sorted(glob.glob(evidencias_dir), reverse=True)
+        if not pastas:
+            return jsonify({"success": False, "message": "Nenhuma pasta de evidências encontrada."})
+            
+        relatorio_path = os.path.join(pastas[0], "relatorio_final.txt")
+        
+        if os.path.exists(relatorio_path):
+            with open(relatorio_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({"success": True, "report": content})
+        else:
+            return jsonify({"success": False, "message": "Relatório final não foi gerado."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
