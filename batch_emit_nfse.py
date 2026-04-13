@@ -140,18 +140,34 @@ def emit_nfse_batch(headless=False):
         # -- UPDATE: Handle pre-login popups (e.g., "EMPRESAS QUE EMITEM NFS-e POR WEBSERVICE")
         print("[INFO] Verificando popups pré-login...")
         try:
-            time.sleep(2) # Give the popup a moment to render
-            popups_pre = page.query_selector_all("button:has-text('OK'), button:has-text('Ok'), .close, button[aria-label='Close'], .modal-header .close")
-            for popup in popups_pre:
+            # Wait up to 5 seconds for the popup 'OK' button to appear before trying to close
+            try:
+                page.wait_for_selector("text='OK', text='Ok'", timeout=5000)
+            except:
+                pass
+                
+            # Use multiple robust locator strategies to find and click the OK/Close buttons
+            locators_to_try = [
+                page.get_by_role("button", name="OK"),
+                page.get_by_text("OK", exact=True),
+                page.get_by_text("Ok", exact=True),
+                page.locator("button:has-text('OK')"),
+                page.locator(".close"),
+                page.locator(".btn-close"),
+                page.locator("button[aria-label='Close']")
+            ]
+            
+            for loc in locators_to_try:
                 try:
-                    if popup.is_visible():
-                        print("[INFO] Popup detectado! Fechando...")
-                        popup.click()
-                        time.sleep(1)
+                    for element in loc.all():
+                        if element.is_visible():
+                            print("[INFO] Botão de popup detectado! Emulando clique...")
+                            element.click(force=True)
+                            time.sleep(1)
                 except:
                     pass
-        except:
-            pass
+        except Exception as e:
+            print(f"[WARN] Erro silencioso ao lidar com popups: {e}")
             
         # Optimized route: Click directly on 'Emitir NFS-e' to go to login
         try:
