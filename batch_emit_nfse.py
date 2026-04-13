@@ -137,14 +137,39 @@ def emit_nfse_batch(headless=False):
         except:
             pass
             
-        # -- UPDATE: Handle pre-login popups (e.g., "EMPRESAS QUE EMITEM NFS-e POR WEBSERVICE")
-        print("[INFO] Verificando popups pré-login...")
+        # Optimized route: Click directly on 'Emitir NFS-e' to go to login
+        try:
+            selector_emitir = "text='Emitir NFS-e'"
+            page.wait_for_selector(selector_emitir, timeout=10000)
+            
+            # This action opens a NEW tab
+            with context.expect_page() as new_page_info:
+                page.click(selector_emitir)
+            
+            # Switch to the new tab
+            page = new_page_info.value
+            page.wait_for_load_state("networkidle")
+            print("[INFO] Botão 'Emitir NFS-e' clicado e nova aba detectada.")
+        except Exception as e:
+            print(f"[WARN] Falha na rota direta, tentando alternativa: {str(e)}")
+            try:
+                page.click("button:has-text('Entrar'), a:has-text('Entrar')")
+                page.wait_for_load_state("networkidle")
+            except:
+                pass
+
+        # -- UPDATE: Handle pre-login popups on the Login Tab (e.g., "EMPRESAS QUE EMITEM NFS-e POR WEBSERVICE")
+        print("[INFO] Verificando popups na tela de login...")
         try:
             # Wait up to 5 seconds for the popup 'OK' button to appear before trying to close
             try:
                 page.wait_for_selector("text='OK', text='Ok'", timeout=5000)
             except:
                 pass
+                
+            # Esc key is very effective for modal dialogs
+            page.keyboard.press("Escape")
+            time.sleep(0.5)
                 
             # Use multiple robust locator strategies to find and click the OK/Close buttons
             locators_to_try = [
@@ -168,27 +193,6 @@ def emit_nfse_batch(headless=False):
                     pass
         except Exception as e:
             print(f"[WARN] Erro silencioso ao lidar com popups: {e}")
-            
-        # Optimized route: Click directly on 'Emitir NFS-e' to go to login
-        try:
-            selector_emitir = "text='Emitir NFS-e'"
-            page.wait_for_selector(selector_emitir, timeout=10000)
-            
-            # This action opens a NEW tab
-            with context.expect_page() as new_page_info:
-                page.click(selector_emitir)
-            
-            # Switch to the new tab
-            page = new_page_info.value
-            page.wait_for_load_state("networkidle")
-            print("[INFO] Botão 'Emitir NFS-e' clicado e nova aba detectada.")
-        except Exception as e:
-            print(f"[WARN] Falha na rota direta, tentando alternativa: {str(e)}")
-            try:
-                page.click("button:has-text('Entrar'), a:has-text('Entrar')")
-                page.wait_for_load_state("networkidle")
-            except:
-                pass
 
         # Wait for login fields (CPF/Usuario and Password)
         try:
