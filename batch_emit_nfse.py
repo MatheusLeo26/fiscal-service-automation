@@ -390,12 +390,13 @@ def emit_nfse_batch(headless=False):
                 
                 # PASSO 1: CLICAR NO CAMPO DE DIGITAÇÃO E DIGITAR O CNPJ DO CLIENTE
                 page.locator(selector_busca_tomador).click()
-                page.fill(selector_busca_tomador, cnpj)
+                page.locator(selector_busca_tomador).press_sequentially(cnpj, delay=50)
+                page.keyboard.press("Enter")
                 
                 # PASSO 2: CLICAR NO BOTÃO PESQUISAR LOGO AO LADO
                 print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
                 btn_pesquisar = page.locator("button:has-text('Pesquisar')").first
-                btn_pesquisar.click()
+                btn_pesquisar.click(force=True)
                 time.sleep(3) # Aguarda retorno da pesquisa (cascata Angular)
                 
                 # PASSO 3: DESCER A TELA PARA VER A OPÇÃO E DAR O CLIQUE OBRIGATÓRIO
@@ -413,9 +414,9 @@ def emit_nfse_batch(headless=False):
                     # Estratégia de Palavras-Chave (Fuzzy): Se "EM" vs "DE" ou pequenas variações travarem, 
                     # tentamos um "aperto de mão" pelas primeiras palavras do nome.
                     try:
-                        # Pega as primeiras 3 palavras significativas (maiores que 2 letras)
+                        # Pega as primeiras 3 palavras significativas (maiores ou iguais a 2 letras)
                         print(f"[INFO] Nome exato não bateu. Tentando busca por palavras-chave...")
-                        keywords = [p for p in nome_empresa.split() if len(p) > 3][:3]
+                        keywords = [p for p in nome_empresa.split() if len(p) >= 2][:3]
                         fuzzy_name = " ".join(keywords)
                         if fuzzy_name:
                             resultado_fuzzy = page.get_by_text(fuzzy_name, exact=False).first
@@ -434,18 +435,21 @@ def emit_nfse_batch(headless=False):
                             # Se houver duplicidade de CNPJ (como no caso da Igreja Batista), 
                             # tentamos filtrar pelo locador que contenha parte do nome E o CNPJ
                             opcoes = page.get_by_text(cnpj_formatado, exact=False)
-                            for i in range(opcoes.count()):
-                                opt = opcoes.nth(i)
-                                texto_opt = opt.inner_text().upper()
-                                # Se alguma palavra do nome da empresa estiver nesse bloco do CNPJ, é o vencedor
-                                if any(word.upper() in texto_opt for word in nome_empresa.split() if len(word) > 3):
-                                    opt.click()
-                                    print(f"[INFO] Tomador selecionado por CNPJ + validação de nome.")
-                                    break
+                            if opcoes.count() > 0:
+                                for i in range(opcoes.count()):
+                                    opt = opcoes.nth(i)
+                                    texto_opt = opt.inner_text().upper()
+                                    # Se alguma palavra do nome da empresa estiver nesse bloco do CNPJ, é o vencedor
+                                    if any(word.upper() in texto_opt for word in nome_empresa.split() if len(word) >= 2):
+                                        opt.click()
+                                        print(f"[INFO] Tomador selecionado por CNPJ + validação de nome.")
+                                        break
+                                else:
+                                    # Se nada bater, clica no primeiro mesmo como última tentativa
+                                    opcoes.first.click(timeout=5000)
+                                    print(f"[WARN] Tomador selecionado apenas por CNPJ (primeira opção).")
                             else:
-                                # Se nada bater, clica no primeiro mesmo como última tentativa
-                                opcoes.first.click()
-                                print(f"[WARN] Tomador selecionado apenas por CNPJ (primeira opção).")
+                                raise Exception("Sem opções suspensas retornadas.")
                         except:
                             print(f"[ERROR] Não foi possível selecionar o tomador. Verifique o print de erro.")
                             raise Exception("Falha definitiva ao selecionar Tomador.")
