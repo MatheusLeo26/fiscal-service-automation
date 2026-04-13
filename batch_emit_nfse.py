@@ -137,6 +137,22 @@ def emit_nfse_batch(headless=False):
         except:
             pass
             
+        # -- UPDATE: Handle pre-login popups (e.g., "EMPRESAS QUE EMITEM NFS-e POR WEBSERVICE")
+        print("[INFO] Verificando popups pré-login...")
+        try:
+            time.sleep(2) # Give the popup a moment to render
+            popups_pre = page.query_selector_all("button:has-text('OK'), button:has-text('Ok'), .close, button[aria-label='Close'], .modal-header .close")
+            for popup in popups_pre:
+                try:
+                    if popup.is_visible():
+                        print("[INFO] Popup detectado! Fechando...")
+                        popup.click()
+                        time.sleep(1)
+                except:
+                    pass
+        except:
+            pass
+            
         # Optimized route: Click directly on 'Emitir NFS-e' to go to login
         try:
             selector_emitir = "text='Emitir NFS-e'"
