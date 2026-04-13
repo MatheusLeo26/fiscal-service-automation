@@ -391,7 +391,9 @@ def emit_nfse_batch(headless=False):
                 # PASSO 1: CLICAR NO CAMPO DE DIGITAÇÃO E DIGITAR O CNPJ DO CLIENTE
                 page.locator(selector_busca_tomador).click()
                 page.locator(selector_busca_tomador).press_sequentially(cnpj, delay=50)
-                page.keyboard.press("Enter")
+                # Removemos o "Enter" pois ele estava ativando a validação de todo o formulário (ex: acusando Valor vazio)
+                page.locator(selector_busca_tomador).blur()
+                time.sleep(0.5)
                 
                 # PASSO 2: CLICAR NO BOTÃO PESQUISAR LOGO AO LADO
                 print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
