@@ -546,7 +546,7 @@ def emit_nfse_batch(headless=False):
                 # Captura de número da nota antes de fechar o modal
                 try:
                     texto_completo = page.inner_text("body")
-                    match = re.search(r"número:\s*(\d+)", texto_completo, re.IGNORECASE)
+                    match = re.search(r"n[uú]mero:\s*(\d+)", texto_completo, re.IGNORECASE)
                     numero_nota = match.group(1) if match else "Desconhecido"
                 except:
                     numero_nota = "Confirmado"
