@@ -415,7 +415,15 @@ def emit_nfse_batch(headless=False):
                 # PASSO 2: CLICAR NO BOTÃO PESQUISAR LOGO AO LADO
                 print("[INFO] Clicando no botão Pesquisar e aguardando resultado...")
                 btn_pesquisar = page.locator("button:has-text('Pesquisar')").first
-                btn_pesquisar.click(force=True)
+                
+                # Removemos o force=True para garantir que ele só clique quando o botão for habilitado pelo Angular
+                btn_pesquisar.wait_for(state="visible", timeout=5000)
+                try:
+                    btn_pesquisar.click(timeout=5000)
+                except:
+                    # Se não habilitou, tenta dar um 'Enter' no campo como fallback
+                    page.locator(selector_busca_tomador).press("Enter")
+                    
                 time.sleep(3) # Aguarda retorno da pesquisa (cascata Angular)
                 
                 # PASSO 3: DESCER A TELA PARA VER A OPÇÃO E DAR O CLIQUE OBRIGATÓRIO
@@ -470,8 +478,16 @@ def emit_nfse_batch(headless=False):
                             else:
                                 raise Exception("Sem opções suspensas retornadas.")
                         except:
-                            print(f"[ERROR] Não foi possível selecionar o tomador. Verifique o print de erro.")
-                            raise Exception("Falha definitiva ao selecionar Tomador.")
+                            # MEGA FALLBACK: Apenas seleciona o primeiro item que apareceu após pesquisar
+                            print(f"[WARN] Tentando resgate extremo (Botão Selecionar ou 1º resultado)...")
+                            try:
+                                resgate = page.locator("button:has-text('Selecionar'), a:has-text('Selecionar')").first
+                                resgate.wait_for(state="visible", timeout=3000)
+                                resgate.click(timeout=3000)
+                                print("[INFO] Tomador selecionado via resgate extremo.")
+                            except:
+                                print(f"[ERROR] Não foi possível selecionar o tomador. Verifique o print de erro.")
+                                raise Exception("Falha definitiva ao selecionar Tomador.")
                 
                 time.sleep(2) # Aguarda o painel inferior de valores carregar
 
