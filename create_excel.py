@@ -3,7 +3,7 @@ import os
 
 data = [
     ["42333077000123", "ARTIGOS ESPORTIVOS ITU LTDA", 420.00, "Serviços de Contabilidade e Departamento Pessoal"],
-    ["39720442000448", "ARTIGOS ESPORTIVOS SOROCABA LTDA", 525.00, "Serviços de Contabilidade e Departamento Pessoal"],
+    ["39720442000148", "ARTIGOS ESPORTIVOS SOROCABA LTDA", 525.00, "Serviços de Contabilidade e Departamento Pessoal"],
     ["58974452000154", "CONDOMINIO TERRAS DE SANTA ROSA", 3000.00, "Serviços de Contabilidade e Departamento Pessoal Contagem de Cartão de Ponto. R$300,00"],
     ["33726493000109", "CPP SERVICOS EMPRESARIAIS LTDA", 360.00, "Serviços de Contabilidade e Departamento Pessoal"],
     ["22456111000140", "FATIMA ARAUJO DERMOFISIO LTDA", 700.00, "Serviços de Contabilidade e Departamento Pessoal"],
