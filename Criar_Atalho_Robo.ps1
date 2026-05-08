@@ -7,5 +7,5 @@ $Shortcut.IconLocation = "$env:USERPROFILE\.gemini\antigravity\scratch\itugiss_a
 $Shortcut.Description = "Lançador da Automação de NFS-e ITUGISS"
 $Shortcut.Save()
 
-echo "Atalho criado com sucesso na sua Área de Trabalho! 🚀🤖"
+Write-Output "Atalho criado com sucesso na sua Área de Trabalho! 🚀🤖"
 pause

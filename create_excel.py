@@ -26,7 +26,8 @@ data = [
     ["25309242000192", "VILTEMAR PEREIRA DE OLIVEIRA GESSO", 600.00, "Serviços de Contabilidade e Departamento Pessoal"],
     ["14272581000125", "VIRG FLORESTAL LTDA", 350.00, "Serviços de Contabilidade e Departamento Pessoal"],
     ["46853469000174", "W.R COMERCIO DE MATERIAIS NOVOS E USADOS EM GERAL LTDA", 650.00, "Serviços de Contabilidade e Departamento Pessoal"],
-    ["07708532000127", "W.R SIQUEIRA & CIA LTDA", 980.00, "Serviços de Contabilidade e Departamento Pessoal"]
+    ["07708532000127", "W.R SIQUEIRA & CIA LTDA", 980.00, "Serviços de Contabilidade e Departamento Pessoal"],
+    ["57093411000196", "MESF - COMERCIO DE ARTEFATOS DE BORRACHA LTDA", 2000.00, "Serviços de Contabilidade e Departamento Pessoal"]
 ]
 
 df = pd.DataFrame(data, columns=["CNPJ", "Nome da empresa", "VALOR", "Discriminação dos Serviços"])
