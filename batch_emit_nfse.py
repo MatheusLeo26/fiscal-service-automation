@@ -373,7 +373,15 @@ def emit_nfse_batch(headless=False):
                 selector_nbs_input = "#ibs_nbs_value, input[name='nbsAuto'], input[placeholder*='NBS']"
                 page.wait_for_selector(selector_nbs_input, timeout=15000)
                 page.locator(selector_nbs_input).scroll_into_view_if_needed()
+                
+                # Limpa o campo (garante que o texto da nota anterior não trave a busca)
                 page.click(selector_nbs_input)
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Backspace")
+                time.sleep(1)
+                
+                # Digita o código para forçar a filtragem do dropdown
+                page.locator(selector_nbs_input).press_sequentially("1.1302.21.00", delay=50)
                 
                 # Wait for the specific dropdown row to appear
                 print("[INFO] Aguardando lista NBS aparecer...")
@@ -397,6 +405,9 @@ def emit_nfse_batch(headless=False):
                 
                 # PASSO 1: CLICAR NO CAMPO DE DIGITAÇÃO E DIGITAR O CNPJ DO CLIENTE
                 page.locator(selector_busca_tomador).click()
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Backspace")
+                time.sleep(0.5)
                 page.locator(selector_busca_tomador).press_sequentially(cnpj, delay=50)
                 # Removemos o "Enter" pois ele estava ativando a validação de todo o formulário (ex: acusando Valor vazio)
                 page.locator(selector_busca_tomador).blur()
@@ -471,6 +482,9 @@ def emit_nfse_batch(headless=False):
                 page.wait_for_selector(selector_valor, timeout=10000)
                 # Formato final com vírgula para respeitar a máscara e uso sequencial
                 page.locator(selector_valor).click()
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Backspace")
+                time.sleep(0.5)
                 page.locator(selector_valor).press_sequentially(valor, delay=30)
                 page.locator(selector_valor).blur()
 
