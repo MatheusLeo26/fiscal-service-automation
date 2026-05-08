@@ -374,29 +374,29 @@ def emit_nfse_batch(headless=False):
                 page.wait_for_selector(selector_nbs_input, timeout=15000)
                 page.locator(selector_nbs_input).scroll_into_view_if_needed()
                 
-                # Limpa o campo (garante que o texto da nota anterior não trave a busca)
-                page.click(selector_nbs_input)
-                page.keyboard.press("Control+A")
-                page.keyboard.press("Backspace")
+                # Limpa o campo de forma mais robusta para SPAs
+                page.fill(selector_nbs_input, "")
+                page.locator(selector_nbs_input).blur()
                 time.sleep(1)
                 
-                # Digita o código para forçar a filtragem do dropdown
-                page.locator(selector_nbs_input).press_sequentially("1.1302.21.00", delay=50)
+                # Digita apenas parte do código LENTAMENTE para forçar o Angular a buscar
+                page.locator(selector_nbs_input).click()
+                page.locator(selector_nbs_input).press_sequentially("1.1302.21", delay=200)
                 
                 # Wait for the specific dropdown row to appear
                 print("[INFO] Aguardando lista NBS aparecer...")
                 # The user specifically mentioned the text "1.1302.21.00 Serviços de contabilidade"
                 selector_nbs_option = ".angucomplete-row:has-text('1.1302.21.00'), .angucomplete-row:has-text('Serviços de contabilidade')"
                 try:
-                    page.wait_for_selector(selector_nbs_option, timeout=10000)
+                    page.wait_for_selector(selector_nbs_option, state="visible", timeout=10000)
                     page.locator(selector_nbs_option).first.scroll_into_view_if_needed()
-                    page.locator(selector_nbs_option).first.click()
+                    page.locator(selector_nbs_option).first.click(timeout=5000)
                     print("[INFO] NBS selecionado com sucesso via clique.")
                 except Exception as e_nbs:
                     print(f"[WARN] Lista NBS não expandiu. Tentando clique forçado...")
                     page.click(selector_nbs_input, force=True)
                     time.sleep(2)
-                    page.locator(selector_nbs_option).first.click()
+                    page.locator(selector_nbs_option).first.click(timeout=5000)
 
                 # Passo 3: Dados do Tomador de Serviço
                 print(f"[INFO] Passo 3: Pesquisando Tomador: {cnpj}...")
@@ -404,11 +404,10 @@ def emit_nfse_batch(headless=False):
                 page.wait_for_selector(selector_busca_tomador, timeout=10000)
                 
                 # PASSO 1: CLICAR NO CAMPO DE DIGITAÇÃO E DIGITAR O CNPJ DO CLIENTE
-                page.locator(selector_busca_tomador).click()
-                page.keyboard.press("Control+A")
-                page.keyboard.press("Backspace")
+                page.fill(selector_busca_tomador, "")
                 time.sleep(0.5)
-                page.locator(selector_busca_tomador).press_sequentially(cnpj, delay=50)
+                page.locator(selector_busca_tomador).click()
+                page.locator(selector_busca_tomador).press_sequentially(cnpj, delay=100)
                 # Removemos o "Enter" pois ele estava ativando a validação de todo o formulário (ex: acusando Valor vazio)
                 page.locator(selector_busca_tomador).blur()
                 time.sleep(0.5)
@@ -481,11 +480,10 @@ def emit_nfse_batch(headless=False):
                 selector_valor = "input#valorServico, input[name='valorServico']"
                 page.wait_for_selector(selector_valor, timeout=10000)
                 # Formato final com vírgula para respeitar a máscara e uso sequencial
-                page.locator(selector_valor).click()
-                page.keyboard.press("Control+A")
-                page.keyboard.press("Backspace")
+                page.fill(selector_valor, "")
                 time.sleep(0.5)
-                page.locator(selector_valor).press_sequentially(valor, delay=30)
+                page.locator(selector_valor).click()
+                page.locator(selector_valor).press_sequentially(valor, delay=100)
                 page.locator(selector_valor).blur()
 
                 # Passo 5: Discriminação do Serviço
