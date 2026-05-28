@@ -219,14 +219,22 @@ def open_browser():
     # Wait a tiny bit for the server to spin up
     time.sleep(1.5)
     url = "http://robo.itugiss:5000/"
-    # Forçar abertura em NOVA JANELA no Windows (Chrome/Edge/Default)
-    # O comando 'start' com --new-window é mais garantido que webbrowser.open_new
+    
+    # Tenta abrir no Chrome, depois no Edge (nativo do Windows), e por fim no navegador padrão
     try:
-        # Tenta Chrome primeiro que é o padrão do robô
+        # Verifica se chrome está no PATH ou tenta rodar, se der erro vai para o except
+        import subprocess
+        subprocess.run("where chrome", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         os.system(f'start chrome --new-window {url}')
-    except:
-        # Fallback para o comportamento padrão do sistema
-        webbrowser.open_new(url)
+    except Exception:
+        try:
+            # Se não tiver Chrome, tenta o Edge que é nativo do Windows
+            import subprocess
+            subprocess.run("where msedge", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os.system(f'start msedge --new-window {url}')
+        except Exception:
+            # Fallback para o padrão do sistema
+            webbrowser.open_new(url)
 
 if __name__ == '__main__':
     # Auto-open the UI when the user clicks the script
