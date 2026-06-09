@@ -369,34 +369,281 @@ def emit_nfse_batch(headless=False):
                 print("[INFO] Passo 2: Selecionando NBS (Apenas clique)...")
                 time.sleep(3) # Wait for site to react to Step 1
                 
-                # Click field to open the Angular dropdown
-                selector_nbs_input = "#ibs_nbs_value, input[name='nbsAuto'], input[placeholder*='NBS']"
-                page.wait_for_selector(selector_nbs_input, timeout=15000)
-                page.locator(selector_nbs_input).scroll_into_view_if_needed()
+                # Click field to open the Angular dropdown - with retry logic
+                selector_nbs_input = "#ibs_nbs_value, input[name='nbsAuto'], input[placeholder*='NBS'], input[id*='nbs'], input[ng-model*='nbs']"
+                
+                nbs_found = False
+                for tentativa_nbs in range(3):
+                    try:
+                        page.wait_for_selector(selector_nbs_input, timeout=20000)
+                        nbs_found = True
+                        break
+                    except:
+                        print(f"[WARN] NBS não apareceu (tentativa {tentativa_nbs+1}/3). Aguardando mais...")
+                        time.sleep(3)
+                        # Tenta fechar popups que podem estar bloqueando
+                        try:
+                            page.keyboard.press("Escape")
+                            time.sleep(1)
+                        except:
+                            pass
+                        # Se for a última tentativa, tenta recarregar apenas a seção
+                        if tentativa_nbs == 1:
+                            try:
+                                # Re-seleciona a atividade para forçar o Angular a renderizar o campo NBS
+                                print("[INFO] Re-selecionando Atividade para forçar carregamento do NBS...")
+                                selector_atividade = "select#atividadeServico, select[name='atividadeServico'], select[name='atividade']"
+                                page.select_option(selector_atividade, index=0)
+                                time.sleep(1)
+                                target_value = page.evaluate('''() => {
+                                    const select = document.querySelector("select#atividadeServico") || 
+                                                   document.querySelector("select[name='atividadeServico']") || 
+                                                   document.querySelector("select[name='atividade']");
+                                    if (!select) return null;
+                                    for (let i = 0; i < select.options.length; i++) {
+                                        const text = select.options[i].text;
+                                        if (text.includes("17.19") || text.includes("CONTABILIDADE")) {
+                                            return select.options[i].value;
+                                        }
+                                    }
+                                    return null;
+                                }''')
+                                if target_value:
+                                    page.select_option(selector_atividade, value=target_value)
+                                time.sleep(3)
+                            except:
+                                pass
+                
+                if not nbs_found:
+                    raise Exception("Campo NBS não apareceu após 3 tentativas. Pulando cliente.")
+                
+                page.locator(selector_nbs_input).first.scroll_into_view_if_needed()
                 
                 # Limpa o campo de forma mais robusta para SPAs
                 page.fill(selector_nbs_input, "")
-                page.locator(selector_nbs_input).blur()
+                page.locator(selector_nbs_input).first.blur()
                 time.sleep(1)
                 
                 # Digita apenas parte do código LENTAMENTE para forçar o Angular a buscar
-                page.locator(selector_nbs_input).click()
-                page.locator(selector_nbs_input).press_sequentially("1.1302.21", delay=200)
+                page.locator(selector_nbs_input).first.click()
+                page.locator(selector_nbs_input).first.press_sequentially("1.1302.21", delay=200)
                 
                 # Wait for the specific dropdown row to appear
                 print("[INFO] Aguardando lista NBS aparecer...")
-                # The user specifically mentioned the text "1.1302.21.00 Serviços de contabilidade"
-                selector_nbs_option = ".angucomplete-row:has-text('1.1302.21.00'), .angucomplete-row:has-text('Serviços de contabilidade')"
+                time.sleep(2) # Dar tempo pro dropdown Angular renderizar
+                
+                # Tenta múltiplos seletores para a opção do dropdown NBS
+                nbs_clicked = False
+                
+                # Estratégia 1: Seletores genéricos de dropdown/autocomplete
+                dropdown_selectors = [
+                    ".angucomplete-row:has-text('1.1302.21')",
+                    ".angucomplete-row:has-text('contabilidade')",
+                    "div[class*='angucomplete'] div:has-text('1.1302.21')",
+                    "div[class*='autocomplete'] div:has-text('1.1302.21')",
+                    "ul[class*='dropdown'] li:has-text('1.1302.21')",
+                    "div[class*='suggestion']:has-text('1.1302.21')",
+                    "div[class*='dropdown']:has-text('contabilidade')",
+                ]
+                
+                for sel in dropdown_selectors:
+                    try:
+                        loc = page.locator(sel).first
+                        if loc.is_visible(timeout=1000):
+                            loc.click(timeout=3000)
+                            nbs_clicked = True
+                            print(f"[INFO] NBS selecionado via seletor: {sel}")
+                            break
+                    except:
+                        continue
+                
+                # Estratégia 2: Busca por texto visível genérico na página
+                if not nbs_clicked:
+                    try:
+                        # Procura qualquer elemento visível que contenha o texto da opção
+                        nbs_text_loc = page.get_by_text("1.1302.21.00", exact=False).first
+                        # Garante que não é o próprio input (queremos o item da lista)
+                        tag = nbs_text_loc.evaluate("el => el.tagName")
+                        if tag.upper() != "INPUT":
+                            nbs_text_loc.click(timeout=3000)
+                            nbs_clicked = True
+                            print("[INFO] NBS selecionado via texto visível.")
+                    except:
+                        pass
+                
+                # Estratégia 3: Confirma com Enter (o autocomplete já preencheu o campo)
+                if not nbs_clicked:
+                    print("[WARN] Nenhum seletor de dropdown funcionou. Confirmando via Enter...")
+                    page.locator(selector_nbs_input).first.press("Enter")
+                    time.sleep(1)
+                    # Verifica se o campo ainda tem o valor (se o Enter limpou, tenta Tab)
+                    valor_campo = page.locator(selector_nbs_input).first.input_value()
+                    if "1.1302" in valor_campo:
+                        print("[INFO] NBS confirmado via tecla Enter.")
+                        nbs_clicked = True
+                    else:
+                        page.locator(selector_nbs_input).first.press("Tab")
+                        print("[INFO] NBS confirmado via tecla Tab.")
+                        nbs_clicked = True
+                
+                time.sleep(1)
+
+                # Passo 2b: Código Indicador da Operação (novo campo obrigatório do site)
+                print("[INFO] Passo 2b: Selecionando Código Indicador da Operação (030101)...")
+                time.sleep(1)
                 try:
-                    page.wait_for_selector(selector_nbs_option, state="visible", timeout=10000)
-                    page.locator(selector_nbs_option).first.scroll_into_view_if_needed()
-                    page.locator(selector_nbs_option).first.click(timeout=5000)
-                    print("[INFO] NBS selecionado com sucesso via clique.")
-                except Exception as e_nbs:
-                    print(f"[WARN] Lista NBS não expandiu. Tentando clique forçado...")
-                    page.click(selector_nbs_input, force=True)
-                    time.sleep(2)
-                    page.locator(selector_nbs_option).first.click(timeout=5000)
+                    # Localiza o campo de autocomplete do Código Indicador
+                    selector_cod_ind = "input[placeholder*='Selecione'], input[name*='indicador'], input[name*='codigoIndicador'], input[ng-model*='indicador']"
+                    # Tenta localizar o campo pelo label próximo
+                    cod_ind_field = None
+                    
+                    # Estratégia 1: Pelo label "Código Indicador da Operação"
+                    try:
+                        label_cod = page.get_by_text("Código Indicador da Operação", exact=False).first
+                        # Pega o input mais próximo (irmão ou filho do container pai)
+                        parent = label_cod.locator("xpath=..")
+                        cod_ind_field = parent.locator("input").first
+                        if not cod_ind_field.is_visible(timeout=2000):
+                            cod_ind_field = None
+                    except:
+                        pass
+                    
+                    # Estratégia 2: Todos os campos "Selecione..." na página e pegar o segundo (primeiro é CST)
+                    if not cod_ind_field:
+                        selecione_inputs = page.locator("input[placeholder='Selecione...']").all()
+                        if len(selecione_inputs) >= 1:
+                            cod_ind_field = selecione_inputs[0]  # Primeiro "Selecione..." após NBS
+                    
+                    if cod_ind_field:
+                        cod_ind_field.scroll_into_view_if_needed()
+                        cod_ind_field.click()
+                        cod_ind_field.fill("")
+                        cod_ind_field.press_sequentially("030101", delay=150)
+                        time.sleep(2)
+                        
+                        # Clicar na opção do dropdown
+                        cod_clicked = False
+                        dropdown_sels = [
+                            ".angucomplete-row:has-text('030101')",
+                            "div[class*='angucomplete'] div:has-text('030101')",
+                            "div[class*='autocomplete'] div:has-text('030101')",
+                            "div[class*='dropdown']:has-text('030101')",
+                            "ul li:has-text('030101')",
+                        ]
+                        for sel in dropdown_sels:
+                            try:
+                                loc = page.locator(sel).first
+                                if loc.is_visible(timeout=1000):
+                                    loc.click(timeout=3000)
+                                    cod_clicked = True
+                                    print(f"[INFO] Código Indicador selecionado via: {sel}")
+                                    break
+                            except:
+                                continue
+                        
+                        if not cod_clicked:
+                            # Fallback: texto visível
+                            try:
+                                opt = page.get_by_text("030101", exact=False).first
+                                tag = opt.evaluate("el => el.tagName")
+                                if tag.upper() != "INPUT":
+                                    opt.click(timeout=3000)
+                                    cod_clicked = True
+                                    print("[INFO] Código Indicador selecionado via texto visível.")
+                            except:
+                                pass
+                        
+                        if not cod_clicked:
+                            # Último recurso: Enter/Tab
+                            cod_ind_field.press("Enter")
+                            time.sleep(0.5)
+                            print("[WARN] Código Indicador confirmado via Enter.")
+                    else:
+                        print("[WARN] Campo 'Código Indicador da Operação' não encontrado. Pulando...")
+                except Exception as e_cod:
+                    print(f"[WARN] Erro ao preencher Código Indicador: {e_cod}")
+                
+                time.sleep(1)
+
+                # Passo 2c: Classificação Tributária (novo campo obrigatório do site)
+                print("[INFO] Passo 2c: Selecionando Classificação Tributária (200052)...")
+                try:
+                    # Localiza o campo de autocomplete da Classificação Tributária
+                    class_trib_field = None
+                    
+                    # Estratégia 1: Pelo label
+                    try:
+                        label_class = page.get_by_text("Classificação Tributária", exact=False).first
+                        parent = label_class.locator("xpath=..")
+                        class_trib_field = parent.locator("input").first
+                        if not class_trib_field.is_visible(timeout=2000):
+                            class_trib_field = None
+                    except:
+                        pass
+                    
+                    # Estratégia 2: Campos "Selecione..." restantes
+                    if not class_trib_field:
+                        selecione_inputs = page.locator("input[placeholder='Selecione...']").all()
+                        # O primeiro agora é Classificação Tributária (Código Indicador já foi preenchido)
+                        for inp in selecione_inputs:
+                            try:
+                                val = inp.input_value()
+                                if not val or val.strip() == "":
+                                    class_trib_field = inp
+                                    break
+                            except:
+                                continue
+                    
+                    if class_trib_field:
+                        class_trib_field.scroll_into_view_if_needed()
+                        class_trib_field.click()
+                        class_trib_field.fill("")
+                        class_trib_field.press_sequentially("200052", delay=150)
+                        time.sleep(2)
+                        
+                        # Clicar na opção do dropdown
+                        class_clicked = False
+                        dropdown_sels = [
+                            ".angucomplete-row:has-text('200052')",
+                            "div[class*='angucomplete'] div:has-text('200052')",
+                            "div[class*='autocomplete'] div:has-text('200052')",
+                            "div[class*='dropdown']:has-text('200052')",
+                            "ul li:has-text('200052')",
+                        ]
+                        for sel in dropdown_sels:
+                            try:
+                                loc = page.locator(sel).first
+                                if loc.is_visible(timeout=1000):
+                                    loc.click(timeout=3000)
+                                    class_clicked = True
+                                    print(f"[INFO] Classificação Tributária selecionada via: {sel}")
+                                    break
+                            except:
+                                continue
+                        
+                        if not class_clicked:
+                            try:
+                                opt = page.get_by_text("200052", exact=False).first
+                                tag = opt.evaluate("el => el.tagName")
+                                if tag.upper() != "INPUT":
+                                    opt.click(timeout=3000)
+                                    class_clicked = True
+                                    print("[INFO] Classificação Tributária selecionada via texto visível.")
+                            except:
+                                pass
+                        
+                        if not class_clicked:
+                            class_trib_field.press("Enter")
+                            time.sleep(0.5)
+                            print("[WARN] Classificação Tributária confirmada via Enter.")
+                    else:
+                        print("[WARN] Campo 'Classificação Tributária' não encontrado. Pulando...")
+                except Exception as e_class:
+                    print(f"[WARN] Erro ao preencher Classificação Tributária: {e_class}")
+                
+                # Aguarda o CST-IBS/CBS ser preenchido automaticamente
+                print("[INFO] Aguardando CST-IBS/CBS ser preenchido automaticamente...")
+                time.sleep(2)
 
                 # Passo 3: Dados do Tomador de Serviço
                 print(f"[INFO] Passo 3: Pesquisando Tomador: {cnpj}...")
@@ -535,26 +782,30 @@ def emit_nfse_batch(headless=False):
                 page.locator("button:has-text('Próximo')").scroll_into_view_if_needed()
                 page.click("button:has-text('Próximo')")
 
-                # Passo 8: Alíquota
+                # Passo 8: Alíquota (pode ter mudado de lugar com a atualização do site)
                 print(f"[INFO] Passo 8: Preenchendo Alíquota ({aliquota})...")
-                # Using ID found by subagent
-                selector_aliq = "input#aliquotaValor, input[name='aliquota']"
-                page.wait_for_selector(selector_aliq, timeout=10000)
-                page.locator(selector_aliq).scroll_into_view_if_needed()
+                selector_aliq = "input#aliquotaValor, input[name='aliquota'], input[name='aliquotaIss'], input[placeholder*='líquota'], input[id*='aliquota']"
                 
-                # O site brasileiro normalmente usa vírgula para decimais na máscara
-                aliquota_limpa = aliquota.replace(".", ",")
-                
-                # Critical: Clear field first (Ctrl+A + Backspace) as per site mask
-                page.click(selector_aliq)
-                page.keyboard.press("Control+A")
-                page.keyboard.press("Backspace")
-                time.sleep(0.5)
-                
-                # Fill clean value (usando type com delay simulando usuário para não bugar a máscara)
-                page.locator(selector_aliq).press_sequentially(aliquota_limpa, delay=150)
-                time.sleep(1)
-                print(f"[INFO] Alíquota '{aliquota_limpa}' inserida.")
+                try:
+                    page.wait_for_selector(selector_aliq, timeout=15000)
+                    page.locator(selector_aliq).first.scroll_into_view_if_needed()
+                    
+                    # O site brasileiro normalmente usa vírgula para decimais na máscara
+                    aliquota_limpa = aliquota.replace(".", ",")
+                    
+                    # Critical: Clear field first (Ctrl+A + Backspace) as per site mask
+                    page.locator(selector_aliq).first.click()
+                    page.keyboard.press("Control+A")
+                    page.keyboard.press("Backspace")
+                    time.sleep(0.5)
+                    
+                    # Fill clean value (usando type com delay simulando usuário para não bugar a máscara)
+                    page.locator(selector_aliq).first.press_sequentially(aliquota_limpa, delay=150)
+                    time.sleep(1)
+                    print(f"[INFO] Alíquota '{aliquota_limpa}' inserida.")
+                except Exception as e_aliq:
+                    print(f"[WARN] Campo de Alíquota não encontrado nesta etapa: {e_aliq}")
+                    print("[INFO] O site pode ter removido este campo. Continuando...")
 
                 # Passo 9: Clicar em "Próximo"
                 print("[INFO] Passo 9: Clicando em Próximo...")

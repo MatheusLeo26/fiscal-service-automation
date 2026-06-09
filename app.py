@@ -218,23 +218,40 @@ def resume_automation():
 def open_browser():
     # Wait a tiny bit for the server to spin up
     time.sleep(1.5)
-    url = "http://robo.itugiss:5000/"
+    url = "http://localhost:5000/"
     
-    # Tenta abrir no Chrome, depois no Edge (nativo do Windows), e por fim no navegador padrão
+    import subprocess
+    import os
+    
+    # Tenta abrir o Opera forçando nova janela (específico para o PC atual)
+    opera_paths = [
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Opera', 'launcher.exe'),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Opera GX', 'launcher.exe')
+    ]
+    
+    for path in opera_paths:
+        if os.path.exists(path):
+            subprocess.Popen([path, '--new-window', url])
+            return
+
     try:
-        # Verifica se chrome está no PATH ou tenta rodar, se der erro vai para o except
-        import subprocess
+        # Verifica se chrome está no PATH
         subprocess.run("where chrome", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         os.system(f'start chrome --new-window {url}')
+        return
     except Exception:
-        try:
-            # Se não tiver Chrome, tenta o Edge que é nativo do Windows
-            import subprocess
-            subprocess.run("where msedge", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            os.system(f'start msedge --new-window {url}')
-        except Exception:
-            # Fallback para o padrão do sistema
-            webbrowser.open_new(url)
+        pass
+
+    try:
+        # Se não tiver Chrome, tenta o Edge
+        subprocess.run("where msedge", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.system(f'start msedge --new-window {url}')
+        return
+    except Exception:
+        pass
+
+    # Tenta via cmd genérico como última esperança para o Opera
+    os.system(f'start opera --new-window {url}')
 
 if __name__ == '__main__':
     # Auto-open the UI when the user clicks the script
