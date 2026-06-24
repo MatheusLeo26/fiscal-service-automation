@@ -10,6 +10,11 @@ from dotenv import load_dotenv
 # Load credentials from .env
 load_dotenv()
 
+# Garantir segurança cibernética: remover qualquer variável com prefixo NEXT_PUBLIC_
+for key in list(os.environ.keys()):
+    if key.upper().startswith("NEXT_PUBLIC_"):
+        del os.environ[key]
+
 # Configurações de Execução
 SALVAR_EVIDENCIA_ERRO = True # Guardar fotos de erro para ajudar no suporte (Sugerido: True)
 

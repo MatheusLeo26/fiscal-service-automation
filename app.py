@@ -6,15 +6,29 @@ import pandas as pd
 from unittest.mock import patch
 from flask import Flask, render_template, request, jsonify
 import glob
+import os
+
+# Garantir segurança cibernética: remover qualquer variável com prefixo NEXT_PUBLIC_
+# para evitar exposição acidental no lado do cliente
+for key in list(os.environ.keys()):
+    if key.upper().startswith("NEXT_PUBLIC_"):
+        del os.environ[key]
 
 # Add the current directory to the path so we can import the batch script
-import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import the main automation function
 from batch_emit_nfse import emit_nfse_batch
 
 app = Flask(__name__)
+
+# Configurações de cookies de sessão seguros
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE='Lax'
+)
+
 
 # Global state to track automation status
 automation_status = {
@@ -112,6 +126,42 @@ def run_automation_thread(aliquota, df_customizado, headless=False):
         automation_status["is_paused"] = False
         pause_event.set() # Ensure doesn't stay blocked
 
+
+@app.before_request
+def block_sensitive_files():
+    path = request.path.lower()
+    # Bloqueia arquivos de código-fonte, mapas de código (.map) e configurações sensíveis
+    blocked_extensions = ['.map', '.tsx', '.ts', '.jsx', '.env', '.py', '.yml', '.yaml', '.git']
+    if any(path.endswith(ext) for ext in blocked_extensions) or '/.git' in path or 'node_modules' in path:
+        return jsonify({"error": "Acesso proibido. Arquivo protegido."}), 403
+
+@app.after_request
+def add_security_headers(response):
+    # Content Security Policy (CSP) estrito
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https://via.placeholder.com; "
+        "connect-src 'self';"
+    )
+    # Proteção contra Clickjacking
+    response.headers['X-Frame-Options'] = 'DENY'
+    # Evitar farejamento de tipo MIME (MIME-sniffing)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    # Controle de Referência (Referrer Policy)
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    
+    # Restrição rígida de CORS (permitir apenas o próprio localhost)
+    origin = request.headers.get('Origin')
+    if origin and (origin.startswith('http://localhost:') or origin.startswith('http://127.0.0.1:')):
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        
+    return response
 
 @app.route('/')
 def index():

@@ -463,6 +463,22 @@
     </style>
 
     <script>
+        // Cibersegurança: Garantir que localStorage e sessionStorage não guardem dados residuais
+        function limparArmazenamentoLocal() {
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+            } catch (e) {
+                console.warn("Falha ao limpar armazenamento do navegador:", e);
+            }
+        }
+
+        // Limpa ao carregar a página
+        window.addEventListener('DOMContentLoaded', limparArmazenamentoLocal);
+        // Limpa ao fechar a aba ou atualizar a página
+        window.addEventListener('beforeunload', limparArmazenamentoLocal);
+        window.addEventListener('unload', limparArmazenamentoLocal);
+
         let pollInterval;
         let originalData = [];
 
