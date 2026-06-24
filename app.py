@@ -7,6 +7,19 @@ from unittest.mock import patch
 from flask import Flask, render_template, request, jsonify
 import glob
 import os
+import secrets
+import logging
+
+# Configuração de Logger Seguro (apenas no arquivo, não envia detalhes ao usuário)
+logger = logging.getLogger('itugiss_security')
+logger.setLevel(logging.ERROR)
+fh = logging.FileHandler('robot_security.log', encoding='utf-8')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+logger.addHandler(fh)
+
+# Gerar token de sessão único a cada reinicialização (Controle de Acesso)
+SESSION_TOKEN = secrets.token_hex(32)
 
 # Garantir segurança cibernética: remover qualquer variável com prefixo NEXT_PUBLIC_
 # para evitar exposição acidental no lado do cliente
@@ -116,8 +129,9 @@ def run_automation_thread(aliquota, df_customizado, headless=False):
         automation_status["message"] = "✅ Emissão finalizada com sucesso! Verifique a pasta 'evidencias'."
         
     except Exception as e:
-        automation_status["error"] = str(e)
-        automation_status["message"] = f"❌ Erro na execução: {str(e)}"
+        logger.exception("Erro crítico na automação de emissão de NFSe")
+        automation_status["error"] = "Erro Interno"
+        automation_status["message"] = "❌ Ocorreu um erro interno. Verifique o arquivo de log no servidor para mais detalhes."
     finally:
         # Restore original builtins
         builtins.input = original_input
@@ -128,12 +142,19 @@ def run_automation_thread(aliquota, df_customizado, headless=False):
 
 
 @app.before_request
-def block_sensitive_files():
+def security_checks():
     path = request.path.lower()
     # Bloqueia arquivos de código-fonte, mapas de código (.map) e configurações sensíveis
     blocked_extensions = ['.map', '.tsx', '.ts', '.jsx', '.env', '.py', '.yml', '.yaml', '.git']
     if any(path.endswith(ext) for ext in blocked_extensions) or '/.git' in path or 'node_modules' in path:
         return jsonify({"error": "Acesso proibido. Arquivo protegido."}), 403
+        
+    # Validar Token de Acesso em todas as rotas da API
+    if path.startswith('/api/'):
+        client_token = request.headers.get('X-Access-Token')
+        if not client_token or client_token != SESSION_TOKEN:
+            logger.warning("Tentativa de acesso bloqueada (Token inválido ou ausente).")
+            return jsonify({"success": False, "message": "Acesso não autorizado."}), 401
 
 @app.after_request
 def add_security_headers(response):
@@ -165,7 +186,7 @@ def add_security_headers(response):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', token=SESSION_TOKEN)
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
@@ -217,12 +238,22 @@ def start_automation():
         return jsonify({"success": False, "message": "Automação já está rodando!"})
         
     data = request.json
-    aliquota = data.get('aliquota', '2.24')
+    aliquota_raw = data.get('aliquota', '2.24')
+    
+    # Validação Restrita do Tipo Alíquota (Allowlist para números)
+    try:
+        aliquota_str = str(aliquota_raw).replace(',', '.')
+        float(aliquota_str) # Garante que é numérico
+        aliquota = aliquota_str
+    except ValueError:
+        logger.warning(f"Tentativa de injeção ou valor inválido na alíquota: {aliquota_raw}")
+        return jsonify({"success": False, "message": "Valor da alíquota inválido. Apenas números permitidos."}), 400
+        
     clientes_editados = data.get('clientes', [])
     headless = data.get('headless', False)
     
-    if not clientes_editados:
-        return jsonify({"success": False, "message": "Nenhum cliente enviado para processamento."})
+    if not isinstance(clientes_editados, list) or not clientes_editados:
+        return jsonify({"success": False, "message": "Nenhum cliente enviado para processamento ou formato inválido."})
         
     # Reset event to running state
     pause_event.set()

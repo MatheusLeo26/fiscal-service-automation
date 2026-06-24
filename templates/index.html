@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emissão Automática NFS-e - GUIA Sistemas</title>
+    <meta name="csrf-token" content="{{ token }}">
     <!-- Use a modern, clean Google Font -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -482,6 +483,30 @@
         let pollInterval;
         let originalData = [];
 
+        // Proteção contra XSS
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+
+        // Wrapper seguro para chamadas da API com token de acesso
+        async function apiFetch(url, options = {}) {
+            const token = document.querySelector('meta[name="csrf-token"]').content;
+            options.headers = {
+                ...options.headers,
+                'X-Access-Token': token
+            };
+            return fetch(url, options);
+        }
+
         async function carregarDados() {
             const btnLoad = document.getElementById('btn-carregar');
             const spinner = document.getElementById('spinner-load');
@@ -492,7 +517,7 @@
             btnText.innerText = 'Lendo Planilha...';
 
             try {
-                const response = await fetch('/api/data');
+                const response = await apiFetch('/api/data');
                 const result = await response.json();
 
                 if (result.success) {
@@ -533,14 +558,14 @@
                         <input type="checkbox" class="skip-check" onchange="toggleSkip(${index})">
                     </td>
                     <td class="td-name">
-                        ${row[colEmpresa]}<br>
-                        <small style="color: grey; font-weight: normal;">${row['CNPJ'] || ''}</small>
+                        ${escapeHTML(row[colEmpresa])}<br>
+                        <small style="color: grey; font-weight: normal;">${escapeHTML(row['CNPJ'] || '')}</small>
                     </td>
                     <td>
-                        <input type="text" class="edit-input val-input" value="${row[colValor]}" data-index="${index}">
+                        <input type="text" class="edit-input val-input" value="${escapeHTML(row[colValor])}" data-index="${index}">
                     </td>
                     <td>
-                        <textarea class="edit-input desc-input" data-index="${index}">${row[colDesc]}</textarea>
+                        <textarea class="edit-input desc-input" data-index="${index}">${escapeHTML(row[colDesc])}</textarea>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -598,7 +623,7 @@
             document.querySelector('.status-indicator').classList.add('running-pulse');
 
             try {
-                const response = await fetch('/api/start', {
+                const response = await apiFetch('/api/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -628,7 +653,7 @@
         function inicarPolling() {
             pollInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/status');
+                    const res = await apiFetch('/api/status');
                     const data = await res.json();
 
                     const panel = document.getElementById('status-panel');
@@ -710,7 +735,7 @@
 
         async function pausarAutomacao() {
             try {
-                const res = await fetch('/api/pause', { method: 'POST' });
+                const res = await apiFetch('/api/pause', { method: 'POST' });
                 const data = await res.json();
                 if (!data.success) alert(data.message);
             } catch (e) {
@@ -732,7 +757,7 @@
             });
 
             try {
-                const res = await fetch('/api/resume', {
+                const res = await apiFetch('/api/resume', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ clientes: currentData })
@@ -755,7 +780,7 @@
 
             btn.querySelector('span').innerText = 'Carregando...';
             try {
-                const res = await fetch('/api/report');
+                const res = await apiFetch('/api/report');
                 const data = await res.json();
                 if (data.success) {
                     div.innerText = data.report;

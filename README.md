@@ -15,6 +15,8 @@ Criado com foco em estabilidade, produtividade e fluidez.
 - **Relatórios de Finalização:** Gera automaticamente um `.txt` tabular das emissões efetuadas exibido diretamente na Web Interface.
 - **Janela Isolada do Navegador:** A interface abre em uma **nova janela** dedicada (Opera, Chrome ou Edge), sem interferir nas abas que você já está usando.
 - **Preenchimento Automático dos Novos Campos Tributários:** Compatível com a atualização de Junho/2026 do GissOnline, preenchendo automaticamente os campos de Código Indicador da Operação, Classificação Tributária e CST-IBS/CBS.
+- **Proteção OWASP Top 10 Avançada:** Protegido por uma arquitetura segura que inclui blindagem contra *Cross-Site Scripting* (XSS) com escape de HTML, sanitização em allowlist contra *injections*, controle rígido de acesso local via *Token CSRF de Sessão*, políticas de segurança CORS/CSP blindadas e registro centralizado em logs técnicos estritos que não deixam *stacktraces* vazarem à interface.
+
 
 ## 🛠️ Tecnologias Utilizadas
 
