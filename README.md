@@ -1,4 +1,4 @@
-# 🤖 Robô Emissor de NFS-e (Extendido - GissOnline Itu)
+# 🤖 Fiscal Service Automation (GissOnline Itu)
 
 Uma ferramenta robusta de automação web projetada para realizar a emissão em massa de Notas Fiscais de Serviço Eletrônicas (NFS-e) no portal GissOnline da Prefeitura de Itu, eliminando a digitação manual de relatórios em planilhas Excel. 
 
