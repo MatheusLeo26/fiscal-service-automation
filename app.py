@@ -331,8 +331,8 @@ def open_browser():
     except Exception:
         pass
 
-    # Tenta via cmd genérico como última esperança para o Opera
-    os.system(f'start opera --new-window {url}')
+    # Fallback: abre no navegador padrão do sistema
+    webbrowser.open(url)
 
 if __name__ == '__main__':
     # Auto-open the UI when the user clicks the script
