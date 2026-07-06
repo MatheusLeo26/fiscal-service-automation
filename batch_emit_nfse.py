@@ -678,68 +678,130 @@ def emit_nfse_batch(headless=False):
                     
                 time.sleep(3) # Aguarda retorno da pesquisa (cascata Angular)
                 
-                # PASSO 3: DESCER A TELA PARA VER A OPÇÃO E DAR O CLIQUE OBRIGATÓRIO
-                print("[INFO] Rolando a tela para visualizar a lista suspensa...")
-                page.mouse.wheel(0, 300) # Rola fisicamente a tela para baixo para revelar a cascata
-                time.sleep(1)
+                # PASSO 3: BUSCAR A OPÇÃO NA LISTA SUSPENSA E CLICAR
+                print("[INFO] Buscando a opção na lista suspensa...")
+                clicado = False
                 
-                try:
-                    # Estratégia principal: Localizar pelo nome vindo da planilha
-                    resultado_nome = page.get_by_text(nome_empresa, exact=False).first
-                    resultado_nome.wait_for(state="visible", timeout=5000)
-                    resultado_nome.click()
-                    print("[INFO] Tomador selecionado com sucesso pelo nome da empresa.")
-                except Exception:
-                    # Estratégia de Palavras-Chave (Fuzzy): Se "EM" vs "DE" ou pequenas variações travarem, 
-                    # tentamos um "aperto de mão" pelas primeiras palavras do nome.
+                # 1. Tenta localizar o container do dropdown de resultados
+                container = None
+                for sel in [".popover", ".dropdown-menu", ".ui-autocomplete", "div[class*='autocomplete']", "div[class*='angucomplete']", "div.cadastro"]:
                     try:
-                        # Pega as primeiras 3 palavras significativas (maiores ou iguais a 2 letras)
-                        print(f"[INFO] Nome exato não bateu. Tentando busca por palavras-chave...")
+                        loc = page.locator(sel)
+                        if loc.is_visible():
+                            container = loc
+                            break
+                    except:
+                        pass
+                
+                if not container:
+                    try:
+                        candidate = page.locator("div").filter(has_text="Cadastro de Empresas").last
+                        if candidate.is_visible():
+                            container = candidate
+                    except:
+                        pass
+                        
+                if container:
+                    print("[INFO] Container de dropdown/cadastro de empresas detectado.")
+                    # Estratégia A: Clicar no texto do nome da empresa dentro do container
+                    try:
+                        opcoes_nome = container.get_by_text(nome_empresa, exact=False)
+                        if opcoes_nome.count() > 0:
+                            opcoes_nome.first.click()
+                            print("[INFO] Tomador clicado com sucesso dentro do container pelo nome.")
+                            clicado = True
+                    except:
+                        pass
+                    
+                    # Estratégia B: Clicar pelo CNPJ formatado dentro do container
+                    if not clicado:
+                        try:
+                            cnpj_pad = cnpj.strip().zfill(14)
+                            cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
+                            opcoes_cnpj = container.get_by_text(cnpj_formatado, exact=False)
+                            if opcoes_cnpj.count() > 0:
+                                opcoes_cnpj.first.click()
+                                print("[INFO] Tomador clicado com sucesso dentro do container pelo CNPJ.")
+                                clicado = True
+                        except:
+                            pass
+                            
+                    # Estratégia C: Clicar no primeiro item de texto válido (que não seja título ou botão Cadastrar)
+                    if not clicado:
+                        try:
+                            paragraphs = container.locator("p, div, span").all()
+                            for p in paragraphs:
+                                if p.is_visible():
+                                    txt = p.inner_text().strip()
+                                    if txt and "Cadastro" not in txt and "Cadastrar" not in txt and len(txt) > 5:
+                                        p.click()
+                                        print(f"[INFO] Tomador clicado por fallback de texto no container: '{txt}'")
+                                        clicado = True
+                                        break
+                        except:
+                            pass
+
+                # 2. Busca Global na página se o container não foi detectado ou falhou
+                if not clicado:
+                    print("[WARN] Container não detectado. Iniciando busca global na página...")
+                    try:
+                        opcoes_globais = page.get_by_text(nome_empresa, exact=False).all()
+                        for opt in opcoes_globais:
+                            try:
+                                if opt.is_visible():
+                                    tag = opt.evaluate("el => el.tagName")
+                                    # Evita clicar em inputs da própria página ou botões indesejados
+                                    if tag.upper() not in ["INPUT", "TEXTAREA", "BUTTON"]:
+                                        opt.click()
+                                        print(f"[INFO] Tomador clicado na busca global (tag: {tag}).")
+                                        clicado = True
+                                        break
+                            except:
+                                pass
+                    except Exception as e_glob:
+                        print(f"[WARN] Falha na busca global por nome: {e_glob}")
+
+                # 3. Busca Global por CNPJ formatado
+                if not clicado:
+                    try:
+                        cnpj_pad = cnpj.strip().zfill(14)
+                        cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
+                        opcoes_globais_cnpj = page.get_by_text(cnpj_formatado, exact=False).all()
+                        for opt in opcoes_globais_cnpj:
+                            try:
+                                if opt.is_visible():
+                                    tag = opt.evaluate("el => el.tagName")
+                                    if tag.upper() not in ["INPUT", "TEXTAREA", "BUTTON"]:
+                                        opt.click()
+                                        print(f"[INFO] Tomador clicado na busca global por CNPJ (tag: {tag}).")
+                                        clicado = True
+                                        break
+                            except:
+                                pass
+                    except Exception as e_glob_cnpj:
+                        print(f"[WARN] Falha na busca global por CNPJ: {e_glob_cnpj}")
+
+                # 4. Fallback original (Word fuzzy)
+                if not clicado:
+                    print("[WARN] Tentando estratégias de fallback legadas...")
+                    try:
+                        # Pega as primeiras 3 palavras significativas
                         keywords = [p for p in nome_empresa.split() if len(p) >= 2][:3]
                         fuzzy_name = " ".join(keywords)
                         if fuzzy_name:
-                            resultado_fuzzy = page.get_by_text(fuzzy_name, exact=False).first
-                            resultado_fuzzy.wait_for(state="visible", timeout=5000)
-                            resultado_fuzzy.click()
-                            print(f"[INFO] Tomador selecionado via palavras-chave: '{fuzzy_name}'")
-                        else:
-                            raise Exception("Sem palavras-chave válidas.")
+                            opcoes_fuzzy = page.get_by_text(fuzzy_name, exact=False).all()
+                            for opt in opcoes_fuzzy:
+                                if opt.is_visible() and opt.evaluate("el => el.tagName").upper() not in ["INPUT", "TEXTAREA", "BUTTON"]:
+                                    opt.click()
+                                    print(f"[INFO] Tomador selecionado via palavras-chave: '{fuzzy_name}'")
+                                    clicado = True
+                                    break
                     except:
-                        print(f"[WARN] Busca por nome falhou. Recorrendo ao CNPJ formatado...")
-                        # Fallback estratégico: O site exibe o CNPJ com pontuação na cascata (Ex: 33.726.493/0001-09)
-                        cnpj_pad = cnpj.strip().zfill(14)
-                        cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
-                        
-                        try:
-                            # Se houver duplicidade de CNPJ (como no caso da Igreja Batista), 
-                            # tentamos filtrar pelo locador que contenha parte do nome E o CNPJ
-                            opcoes = page.get_by_text(cnpj_formatado, exact=False)
-                            if opcoes.count() > 0:
-                                for i in range(opcoes.count()):
-                                    opt = opcoes.nth(i)
-                                    texto_opt = opt.inner_text().upper()
-                                    # Se alguma palavra do nome da empresa estiver nesse bloco do CNPJ, é o vencedor
-                                    if any(word.upper() in texto_opt for word in nome_empresa.split() if len(word) >= 2):
-                                        opt.click()
-                                        print(f"[INFO] Tomador selecionado por CNPJ + validação de nome.")
-                                        break
-                                else:
-                                    # Se nada bater, clica no primeiro mesmo como última tentativa
-                                    opcoes.first.click(timeout=5000)
-                                    print(f"[WARN] Tomador selecionado apenas por CNPJ (primeira opção).")
-                            else:
-                                raise Exception("Sem opções suspensas retornadas.")
-                        except:
-                            # MEGA FALLBACK: Apenas seleciona o primeiro item que apareceu após pesquisar
-                            print(f"[WARN] Tentando resgate extremo (Botão Selecionar ou 1º resultado)...")
-                            try:
-                                resgate = page.locator("button:has-text('Selecionar'), a:has-text('Selecionar')").first
-                                resgate.wait_for(state="visible", timeout=3000)
-                                resgate.click(timeout=3000)
-                                print("[INFO] Tomador selecionado via resgate extremo.")
-                            except:
-                                print(f"[ERROR] Não foi possível selecionar o tomador. Verifique o print de erro.")
-                                raise Exception("Falha definitiva ao selecionar Tomador.")
+                        pass
+
+                if not clicado:
+                    # Se nada funcionou, lança exceção para acionar a captura de tela e fluxo de erro
+                    raise Exception("Falha definitiva ao selecionar Tomador.")
                 
                 time.sleep(2) # Aguarda o painel inferior de valores carregar
 

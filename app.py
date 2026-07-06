@@ -304,7 +304,19 @@ def open_browser():
     import subprocess
     import os
     
-    # Tenta abrir o Opera forçando nova janela (específico para o PC atual)
+    # 1. Tenta abrir o Chrome em nova janela (Prioridade solicitada pelo usuário)
+    chrome_paths = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google', 'Chrome', 'Application', 'chrome.exe')
+    ]
+    
+    for path in chrome_paths:
+        if os.path.exists(path):
+            subprocess.Popen([path, '--new-window', url])
+            return
+
+    # 2. Tenta abrir o Opera/Opera GX
     opera_paths = [
         os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Opera', 'launcher.exe'),
         os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Programs', 'Opera GX', 'launcher.exe')
@@ -315,24 +327,33 @@ def open_browser():
             subprocess.Popen([path, '--new-window', url])
             return
 
+    # 3. Tenta abrir o Edge em nova janela
+    edge_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+    ]
+    for path in edge_paths:
+        if os.path.exists(path):
+            subprocess.Popen([path, '--new-window', url])
+            return
+
+    # Fallbacks usando PATH do sistema ou padrão
     try:
-        # Verifica se chrome está no PATH
         subprocess.run("where chrome", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        os.system(f'start chrome --new-window {url}')
+        os.system(f'start chrome --new-window "{url}"')
         return
     except Exception:
         pass
 
     try:
-        # Se não tiver Chrome, tenta o Edge
         subprocess.run("where msedge", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        os.system(f'start msedge --new-window {url}')
+        os.system(f'start msedge --new-window "{url}"')
         return
     except Exception:
         pass
 
-    # Fallback: abre no navegador padrão do sistema
-    webbrowser.open(url)
+    # Fallback final: abre no navegador padrão do sistema
+    webbrowser.open_new(url)
 
 if __name__ == '__main__':
     # Auto-open the UI when the user clicks the script
