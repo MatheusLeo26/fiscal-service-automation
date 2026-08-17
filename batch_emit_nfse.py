@@ -314,6 +314,12 @@ def emit_nfse_batch(headless=False):
                 valor = raw_str
             
             nome_empresa = str(row[col_empresa]).strip()
+            
+            # OVERRIDE: Tratamento específico para a Primeira Igreja Batista
+            # Na planilha está 'EM ITU' e no sistema está 'DE ITU'. Isso faz a Estratégia A falhar e cair no CNPJ.
+            if cnpj == "48994164000108":
+                nome_empresa = "PRIMEIRA IGREJA BATISTA"
+                
             descricao = str(row[col_descricao]).strip()
             
             print(f"\n[PROCESS] Emitindo nota ({index+1}/{len(df_execucao)}): {nome_empresa} ({cnpj})")
