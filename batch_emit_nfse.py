@@ -726,18 +726,43 @@ def emit_nfse_batch(headless=False):
                         except:
                             pass
                             
-                    # Estratégia C: Clicar no primeiro item de texto válido (que não seja título ou botão Cadastrar)
+                    # Estratégia C: Clicar no primeiro item que tenha alguma palavra em comum (evita clicar errado em matriz/filial)
                     if not clicado:
                         try:
+                            # Tenta achar alguma opção que tenha pelo menos a primeira palavra forte do nome
+                            palavra_chave = nome_empresa.split()[0].upper()
+                            if len(palavra_chave) < 3 and len(nome_empresa.split()) > 1:
+                                palavra_chave = nome_empresa.split()[1].upper()
+                                
                             paragraphs = container.locator("p, div, span").all()
                             for p in paragraphs:
                                 if p.is_visible():
                                     txt = p.inner_text().strip()
                                     if txt and "Cadastro" not in txt and "Cadastrar" not in txt and len(txt) > 5:
-                                        p.click()
-                                        print(f"[INFO] Tomador clicado por fallback de texto no container: '{txt}'")
-                                        clicado = True
-                                        break
+                                        # Regra específica para o problema da Igreja x Convenção
+                                        if "CONVENCAO" in txt.upper() or "CONVENÇÃO" in txt.upper():
+                                            if "IGREJA" in nome_empresa.upper():
+                                                continue # Pula a convenção e tenta o próximo
+                                                
+                                        if palavra_chave in txt.upper():
+                                            p.click()
+                                            print(f"[INFO] Tomador clicado por fallback de palavra-chave no container: '{txt}'")
+                                            clicado = True
+                                            break
+                                            
+                            # Se ainda não clicou, usa o fallback cego original (apenas como último recurso real do container)
+                            if not clicado:
+                                for p in paragraphs:
+                                    if p.is_visible():
+                                        txt = p.inner_text().strip()
+                                        if txt and "Cadastro" not in txt and "Cadastrar" not in txt and len(txt) > 5:
+                                            # Evita convenção novamente
+                                            if ("CONVENCAO" in txt.upper() or "CONVENÇÃO" in txt.upper()) and "IGREJA" in nome_empresa.upper():
+                                                continue
+                                            p.click()
+                                            print(f"[INFO] Tomador clicado por fallback cego no container: '{txt}'")
+                                            clicado = True
+                                            break
                         except:
                             pass
 
@@ -792,6 +817,9 @@ def emit_nfse_batch(headless=False):
                             opcoes_fuzzy = page.get_by_text(fuzzy_name, exact=False).all()
                             for opt in opcoes_fuzzy:
                                 if opt.is_visible() and opt.evaluate("el => el.tagName").upper() not in ["INPUT", "TEXTAREA", "BUTTON"]:
+                                    txt = opt.inner_text().strip()
+                                    if ("CONVENCAO" in txt.upper() or "CONVENÇÃO" in txt.upper()) and "IGREJA" in nome_empresa.upper():
+                                        continue
                                     opt.click()
                                     print(f"[INFO] Tomador selecionado via palavras-chave: '{fuzzy_name}'")
                                     clicado = True
