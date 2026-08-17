@@ -718,11 +718,16 @@ def emit_nfse_batch(headless=False):
                         try:
                             cnpj_pad = cnpj.strip().zfill(14)
                             cnpj_formatado = f"{cnpj_pad[:2]}.{cnpj_pad[2:5]}.{cnpj_pad[5:8]}/{cnpj_pad[8:12]}-{cnpj_pad[12:]}"
-                            opcoes_cnpj = container.get_by_text(cnpj_formatado, exact=False)
-                            if opcoes_cnpj.count() > 0:
-                                opcoes_cnpj.first.click()
-                                print("[INFO] Tomador clicado com sucesso dentro do container pelo CNPJ.")
-                                clicado = True
+                            opcoes_cnpj = container.get_by_text(cnpj_formatado, exact=False).all()
+                            for opt in opcoes_cnpj:
+                                if opt.is_visible():
+                                    txt = opt.inner_text().strip()
+                                    if ("CONVENCAO" in txt.upper() or "CONVENÇÃO" in txt.upper()) and "IGREJA" in nome_empresa.upper():
+                                        continue
+                                    opt.click()
+                                    print("[INFO] Tomador clicado com sucesso dentro do container pelo CNPJ.")
+                                    clicado = True
+                                    break
                         except:
                             pass
                             
@@ -797,6 +802,9 @@ def emit_nfse_batch(headless=False):
                                 if opt.is_visible():
                                     tag = opt.evaluate("el => el.tagName")
                                     if tag.upper() not in ["INPUT", "TEXTAREA", "BUTTON"]:
+                                        txt = opt.inner_text().strip()
+                                        if ("CONVENCAO" in txt.upper() or "CONVENÇÃO" in txt.upper()) and "IGREJA" in nome_empresa.upper():
+                                            continue
                                         opt.click()
                                         print(f"[INFO] Tomador clicado na busca global por CNPJ (tag: {tag}).")
                                         clicado = True
