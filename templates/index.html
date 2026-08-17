@@ -311,7 +311,10 @@
                     <table id="client-table">
                         <thead>
                             <tr>
-                                <th style="width: 40px;">Pular</th>
+                                <th style="width: 50px; text-align: center;">
+                                    <input type="checkbox" id="master-skip" style="cursor: pointer;" onchange="toggleAllSkip(this)" title="Marcar/Desmarcar Todos">
+                                    <br><span style="font-size: 0.75rem;">Todos</span>
+                                </th>
                                 <th>Empresa</th>
                                 <th style="width: 100px;">Valor (R$)</th>
                                 <th>Discriminação</th>
@@ -543,6 +546,9 @@
         function renderTable(data) {
             const tbody = document.getElementById('client-body');
             tbody.innerHTML = '';
+            
+            const masterSkip = document.getElementById('master-skip');
+            if (masterSkip) masterSkip.checked = false;
 
             data.forEach((row, index) => {
                 // Find column names dynamically (same logic as robot)
@@ -575,6 +581,23 @@
         function toggleSkip(index) {
             const row = document.getElementById(`row-${index}`);
             row.classList.toggle('skipped');
+        }
+
+        function toggleAllSkip(masterCheckbox) {
+            const isChecked = masterCheckbox.checked;
+            const skipCheckboxes = document.querySelectorAll('.skip-check');
+            
+            skipCheckboxes.forEach((checkbox, index) => {
+                checkbox.checked = isChecked;
+                const row = document.getElementById(`row-${index}`);
+                if (row) {
+                    if (isChecked) {
+                        row.classList.add('skipped');
+                    } else {
+                        row.classList.remove('skipped');
+                    }
+                }
+            });
         }
 
         async function iniciarAutomacao() {
